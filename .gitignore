@@ -1,0 +1,10 @@
+wp-config.php
+/misc
+/wp-content/uploads/_wpremote_backups/
+/wp-content/w3tc/
+/wp-content/backup-db/
+/wp-content/uploads/*
+.htaccess
+sitemap.xml
+sitemap.xml.gz
+.DS_Store*
