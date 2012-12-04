@@ -9,7 +9,7 @@ function _wprp_get_plugins() {
 
 	require_once( ABSPATH . '/wp-admin/includes/plugin.php' );
 
-    _wpr_add_non_extend_plugin_support_filter();
+	_wpr_add_non_extend_plugin_support_filter();
 
 	// Get all plugins
 	$plugins = get_plugins();
@@ -191,10 +191,11 @@ function _wpr_add_non_extend_plugin_support( $value ) {
 function _wprp_get_non_extend_plugins_data() {
 
     return array(
-
-        'gravity_forms' => '_wpr_get_gravity_form_plugin_data'
-
+        'gravity_forms' => '_wpr_get_gravity_form_plugin_data',
+        'backupbuddy' => '_wpr_get_backupbuddy_plugin_data',
+        'tribe_events_pro' => '_wpr_get_tribe_events_pro_plugin_data'
     );
+
 }
 
 function _wpr_get_gravity_form_plugin_data() {
@@ -216,5 +217,51 @@ function _wpr_get_gravity_form_plugin_data() {
         'package'         => $version_data['url'],
         'new_version'     => $version_data['version']
     );
+
+}
+
+function _wpr_get_backupbuddy_plugin_data() {
+
+	if ( !class_exists('pb_backupbuddy') )
+		return false;
+
+	require_once( pb_backupbuddy::plugin_path() . '/pluginbuddy/lib/updater/updater.php' );
+	$preloader_class = 'pb_' . pb_backupbuddy::settings( 'slug' ) . '_updaterpreloader';
+	$updater_preloader = new $preloader_class( pb_backupbuddy::settings( 'slug' ) );
+	$updater_preloader->upgrader_register();
+	$updater_preloader->upgrader_select();
+
+	if ( !is_a( pb_backupbuddy::$_updater, 'pb_backupbuddy_updater' ) || !method_exists( pb_backupbuddy::$_updater, 'check_for_updates' ) )
+		return false;
+
+	$current_version = pb_backupbuddy::settings( 'version' );
+	$update_data = pb_backupbuddy::$_updater->check_for_updates();
+
+	if ( $update_data->key_status != 'ok' || version_compare( $update_data->new_version, $current_version, '<=' ) )
+		return false;
+
+	$update_data->plugin_location = plugin_basename( pb_backupbuddy::plugin_path() . '/backupbuddy.php' ); // needed in _wpr_add_non_extend_plugin_support()
+
+	return $update_data;
+
+}
+
+function _wpr_get_tribe_events_pro_plugin_data() {
+
+	if ( !class_exists( 'TribeEventsPro' ) || ! class_exists( 'PluginUpdateEngineChecker' ) )
+		return false;
+
+	$events = TribeEventsPro::instance();
+	$updater = new PluginUpdateEngineChecker( $events->updateUrl, $events->pluginSlug, array(), plugin_basename( $events->pluginPath . 'events-calendar-pro.php' ) );
+	$state = get_option( $updater->optionName );
+
+	if ( !is_a( $state->update, 'PluginUpdateUtility' ) )
+		return false;
+
+	if ( version_compare( $state->update->version, $updater->getInstalledVersion(), '<=' ) )
+		return false;
+
+	$update_data = $state->update->toWpFormat();
+	$update_data->plugin_location = $updater->pluginFile; // needed in _wpr_add_non_extend_plugin_support()
 
 }

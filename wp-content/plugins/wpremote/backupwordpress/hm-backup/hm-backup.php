@@ -3,9 +3,9 @@
 /**
  * Generic file and database backup class
  *
- * @version 2.0 Beta
+ * @version 2.1
  */
-class WPR_HM_Backup {
+class HM_Backup {
 
 	/**
 	 * The path where the backup file should be saved
@@ -190,13 +190,14 @@ class WPR_HM_Backup {
 	 */
 	public static function get_home_path() {
 
-		$home = get_option( 'home' );
-		$siteurl = get_option( 'siteurl' );
+		$home_url = home_url();
+		$site_url = site_url();
 
 		$home_path = ABSPATH;
 
-		if ( ! empty( $home ) && $home !== $siteurl )
-			$home_path = trailingslashit( substr( ABSPATH, 0, strrpos( ABSPATH, str_replace( $home, '', $siteurl ) ) ) );
+		// If site_url contains home_url and they differ then assume WordPress is installed in a sub directory
+		if ( $home_url !== $site_url && strpos( $site_url, $home_url ) === 0 )
+			$home_path = trailingslashit( substr( ABSPATH, 0, strrpos( ABSPATH, str_replace( $home_url, '', $site_url ) ) ) );
 
 		return self::conform_dir( $home_path );
 
@@ -270,7 +271,7 @@ class WPR_HM_Backup {
 	public function get_archive_filename() {
 
 		if ( empty( $this->archive_filename ) )
-			$this->set_archive_filename( strtolower( sanitize_file_name( implode( '-', array( get_bloginfo( 'name' ), 'backup', date( 'Y-m-d-H-i-s', current_time( 'timestamp' ) ) ) ) ) ) . '.zip' );
+			$this->set_archive_filename( implode( '-', array( sanitize_title( str_ireplace( array( 'http://', 'https://', 'www' ), '', home_url() ) ), 'backup', date( 'Y-m-d-H-i-s', current_time( 'timestamp' ) ) ) ) . '.zip' );
 
 		return $this->archive_filename;
 
@@ -315,7 +316,7 @@ class WPR_HM_Backup {
 	public function get_database_dump_filename() {
 
 		if ( empty( $this->database_dump_filename ) )
-			$this->set_database_dump_filename( strtolower( sanitize_file_name( remove_accents(  'database_' . DB_NAME . '.sql' ) ) ) );
+			$this->set_database_dump_filename( 'database_' . DB_NAME . '.sql' );
 
 		return $this->database_dump_filename;
 
@@ -350,7 +351,7 @@ class WPR_HM_Backup {
     public function get_root() {
 
 		if ( empty( $this->root ) )
-			$this->set_root( $this->conform_dir( self::get_home_path() ) );
+			$this->set_root( self::conform_dir( self::get_home_path() ) );
 
         return $this->root;
 
@@ -368,7 +369,7 @@ class WPR_HM_Backup {
     	if ( empty( $path ) || ! is_string( $path ) || ! is_dir ( $path ) )
     		throw new Exception( 'Invalid root path <code>' . $path . '</code> must be a valid directory path' );
 
-    	$this->root = $this->conform_dir( $path );
+    	$this->root = self::conform_dir( $path );
 
     }
 
@@ -381,7 +382,7 @@ class WPR_HM_Backup {
     public function get_path() {
 
 		if ( empty( $this->path ) )
-			$this->set_path( $this->conform_dir( WP_CONTENT_DIR . '/backups' ) );
+			$this->set_path( self::conform_dir( hmbkp_path_default() ) );
 
         return $this->path;
 
@@ -399,7 +400,7 @@ class WPR_HM_Backup {
     	if ( empty( $path ) || ! is_string( $path ) )
     		throw new Exception( 'Invalid backup path <code>' . $path . '</code> must be a non empty (string)' );
 
-    	$this->path = $this->conform_dir( $path );
+    	$this->path = self::conform_dir( $path );
 
     }
 
@@ -511,7 +512,7 @@ class WPR_HM_Backup {
 
 		// Find the one which works
 		foreach ( $mysqldump_locations as $location )
-		    if ( is_executable( $this->conform_dir( $location ) ) )
+		    if ( is_executable( self::conform_dir( $location ) ) )
 	 	    	$this->set_mysqldump_command_path( $location );
 
 		return $this->mysqldump_command_path;
@@ -572,7 +573,7 @@ class WPR_HM_Backup {
 
 		// Find the one which works
 		foreach ( $zip_locations as $location )
-			if ( is_executable( $this->conform_dir( $location ) ) )
+			if ( is_executable( self::conform_dir( $location ) ) )
 				$this->set_zip_command_path( $location );
 
 		return $this->zip_command_path;
@@ -608,7 +609,7 @@ class WPR_HM_Backup {
 	 */
 	public function backup() {
 
-		$this->do_action( 'wprhmbkp_backup_started' );
+		$this->do_action( 'hmbkp_backup_started' );
 
 		// Backup database
 		if ( $this->get_type() !== 'file' )
@@ -617,7 +618,7 @@ class WPR_HM_Backup {
 		// Zip everything up
 		$this->archive();
 
-		$this->do_action( 'wprhmbkp_backup_complete' );
+		$this->do_action( 'hmbkp_backup_complete' );
 
 	}
 
@@ -631,21 +632,21 @@ class WPR_HM_Backup {
 	 */
 	public function dump_database() {
 
-		$this->do_action( 'wprhmbkp_mysqldump_started' );
-
 		if ( $this->get_mysqldump_command_path() )
 			$this->mysqldump();
 
 		if ( empty( $this->mysqldump_verified ) )
 			$this->mysqldump_fallback();
 
-		$this->do_action( 'wprhmbkp_mysqldump_finished' );
+		$this->do_action( 'hmbkp_mysqldump_finished' );
 
 	}
 
 	public function mysqldump() {
 
 		$this->mysqldump_method = 'mysqldump';
+
+		$this->do_action( 'hmbkp_mysqldump_started' );
 
 		$host = reset( explode( ':', DB_HOST ) );
 		$port = strpos( DB_HOST, ':' ) ? end( explode( ':', DB_HOST ) ) : '';
@@ -700,6 +701,8 @@ class WPR_HM_Backup {
 
 		$this->mysqldump_method = 'mysqldump_fallback';
 
+		$this->do_action( 'hmbkp_mysqldump_started' );
+
 	    $this->db = mysql_pconnect( DB_HOST, DB_USER, DB_PASSWORD );
 
 	    mysql_select_db( DB_NAME, $this->db );
@@ -741,8 +744,6 @@ class WPR_HM_Backup {
 	 */
 	public function archive() {
 
-		$this->do_action( 'wprhmbkp_archive_started' );
-
 		// Do we have the path to the zip command
 		if ( $this->get_zip_command_path() )
 			$this->zip();
@@ -759,7 +760,7 @@ class WPR_HM_Backup {
 		if ( file_exists( $this->get_database_dump_filepath() ) )
 			unlink( $this->get_database_dump_filepath() );
 
-		$this->do_action( 'wprhmbkp_archive_finished' );
+		$this->do_action( 'hmbkp_archive_finished' );
 
 	}
 
@@ -772,17 +773,19 @@ class WPR_HM_Backup {
 
 		$this->archive_method = 'zip';
 
+		$this->do_action( 'hmbkp_archive_started' );
+
 		// Zip up $this->root with excludes
 		if ( $this->get_type() !== 'database' && $this->exclude_string( 'zip' ) )
-		    $this->warning( $this->archive_method, shell_exec( 'cd ' . escapeshellarg( $this->get_root() ) . ' && ' . escapeshellarg( $this->get_zip_command_path() ) . ' -rq ' . escapeshellarg( $this->get_archive_filepath() ) . ' ./' . ' -x ' . $this->exclude_string( 'zip' ) . ' 2>&1' ) );
+		    $this->warning( $this->archive_method, shell_exec( 'cd ' . escapeshellarg( $this->get_root() ) . ' && ' . escapeshellcmd( $this->get_zip_command_path() ) . ' -rq ' . escapeshellarg( $this->get_archive_filepath() ) . ' ./' . ' -x ' . $this->exclude_string( 'zip' ) . ' 2>&1' ) );
 
 		// Zip up $this->root without excludes
 		elseif ( $this->get_type() !== 'database' )
-		    $this->warning( $this->archive_method, shell_exec( 'cd ' . escapeshellarg( $this->get_root() ) . ' && ' . escapeshellarg( $this->get_zip_command_path() ) . ' -rq ' . escapeshellarg( $this->get_archive_filepath() ) . ' ./' . ' 2>&1' ) );
+		    $this->warning( $this->archive_method, shell_exec( 'cd ' . escapeshellarg( $this->get_root() ) . ' && ' . escapeshellcmd( $this->get_zip_command_path() ) . ' -rq ' . escapeshellarg( $this->get_archive_filepath() ) . ' ./' . ' 2>&1' ) );
 
 		// Add the database dump to the archive
 		if ( $this->get_type() !== 'file' )
-		    $this->warning( $this->archive_method, shell_exec( 'cd ' . escapeshellarg( $this->get_path() ) . ' && ' . escapeshellarg( $this->get_zip_command_path() ) . ' -uq ' . escapeshellarg( $this->get_archive_filepath() ) . ' ' . escapeshellarg( $this->get_database_dump_filename() ) . ' 2>&1' ) );
+		    $this->warning( $this->archive_method, shell_exec( 'cd ' . escapeshellarg( $this->get_path() ) . ' && ' . escapeshellcmd( $this->get_zip_command_path() ) . ' -uq ' . escapeshellarg( $this->get_archive_filepath() ) . ' ' . escapeshellarg( $this->get_database_dump_filename() ) . ' 2>&1' ) );
 
 		$this->verify_archive();
 
@@ -800,10 +803,14 @@ class WPR_HM_Backup {
 		$this->errors_to_warnings( $this->archive_method );
 		$this->archive_method = 'ziparchive';
 
+		$this->do_action( 'hmbkp_archive_started' );
+
     	$zip = new ZipArchive();
 
     	if ( ! class_exists( 'ZipArchive' ) || ! $zip->open( $this->get_archive_filepath(), ZIPARCHIVE::CREATE ) )
     	    return;
+
+		$excludes = $this->exclude_string( 'regex' );
 
 		if ( $this->get_type() !== 'database' ) {
 
@@ -811,11 +818,23 @@ class WPR_HM_Backup {
 
 			foreach ( $this->get_files() as $file ) {
 
+				// Skip dot files, they should only exist on versions of PHP between 5.2.11 -> 5.3
+				if ( method_exists( $file, 'isDot' ) && $file->isDot() )
+					continue;
+
+				// Skip unreadable files
+				if ( ! $file->isReadable() )
+					continue;
+
+			    // Excludes
+			    if ( $excludes && preg_match( '(' . $excludes . ')', str_ireplace( trailingslashit( $this->get_root() ), '', self::conform_dir( $file->getPathname() ) ) ) )
+			        continue;
+
 			    if ( $file->isDir() )
-					$zip->addEmptyDir( trailingslashit( str_ireplace( trailingslashit( $this->get_root() ), '', $this->conform_dir( $file->getPathname() ) ) ) );
+					$zip->addEmptyDir( trailingslashit( str_ireplace( trailingslashit( $this->get_root() ), '', self::conform_dir( $file->getPathname() ) ) ) );
 
 			    elseif ( $file->isFile() )
-					$zip->addFile( $file->getPathname(), str_ireplace( trailingslashit( $this->get_root() ), '', $this->conform_dir( $file->getPathname() ) ) );
+					$zip->addFile( $file->getPathname(), str_ireplace( trailingslashit( $this->get_root() ), '', self::conform_dir( $file->getPathname() ) ) );
 
 				if ( ++$files_added % 500 === 0 )
 					if ( ! $zip->close() || ! $zip->open( $this->get_archive_filepath(), ZIPARCHIVE::CREATE ) )
@@ -855,6 +874,8 @@ class WPR_HM_Backup {
 		$this->errors_to_warnings( $this->archive_method );
 		$this->archive_method = 'pclzip';
 
+		$this->do_action( 'hmbkp_archive_started' );
+
 		global $_hmbkp_exclude_string;
 
 		$_hmbkp_exclude_string = $this->exclude_string( 'regex' );
@@ -865,7 +886,7 @@ class WPR_HM_Backup {
 
 		// Zip up everything
 		if ( $this->get_type() !== 'database' )
-			if ( ! $archive->add( $this->get_root(), PCLZIP_OPT_REMOVE_PATH, $this->get_root(), PCLZIP_CB_PRE_ADD, 'wpr_hmbkp_pclzip_callback' ) )
+			if ( ! $archive->add( $this->get_root(), PCLZIP_OPT_REMOVE_PATH, $this->get_root(), PCLZIP_CB_PRE_ADD, 'hmbkp_pclzip_callback' ) )
 				$this->warning( $this->archive_method, $archive->errorInfo( true ) );
 
 		// Add the database
@@ -881,11 +902,14 @@ class WPR_HM_Backup {
 
 	public function verify_mysqldump() {
 
+		$this->do_action( 'hmbkp_mysqldump_verify_started' );
+
 		// If we've already passed then no need to check again
 		if ( ! empty( $this->mysqldump_verified ) )
 			return true;
 
-		if ( ! file_exists( $this->get_database_dump_filepath() ) )
+		// mysqldump can create empty dump files on error so we need to check the filesize
+		if ( ! file_exists( $this->get_database_dump_filepath() ) || filesize( $this->get_database_dump_filepath() ) === 0 )
 			$this->error( $this->get_mysqldump_method(), __( 'The mysqldump file was not created', 'hmbkp' ) );
 
 		if ( $this->get_errors( $this->get_mysqldump_method() ) )
@@ -904,6 +928,8 @@ class WPR_HM_Backup {
 	 */
 	public function verify_archive() {
 
+		$this->do_action( 'hmbkp_archive_verify_started' );
+
 		// If we've already passed then no need to check again
 		if ( ! empty( $this->archive_verified ) )
 			return true;
@@ -914,7 +940,7 @@ class WPR_HM_Backup {
 		// Verify using the zip command if possible
 		if ( $this->get_zip_command_path() && $this->get_archive_method() === 'zip' ) {
 
-			$verify = shell_exec( escapeshellarg( $this->get_zip_command_path() ) . ' -T ' . escapeshellarg( $this->get_archive_filepath() ) . ' 2> /dev/null' );
+			$verify = shell_exec( escapeshellcmd( $this->get_zip_command_path() ) . ' -T ' . escapeshellarg( $this->get_archive_filepath() ) . ' 2> /dev/null' );
 
 			if ( strpos( $verify, 'OK' ) === false )
 				$this->error( $this->get_archive_method(), $verify );
@@ -928,13 +954,15 @@ class WPR_HM_Backup {
 		if ( $this->get_errors( $this->get_archive_method() ) )
 			return false;
 
+		if ( $this->get_unreadable_file_count() )
+			$this->warning( $this->get_archive_method(), __( 'The following files are unreadable and couldn\'t be backed up: ', 'hmbkp' ) . implode( ', ', $this->get_unreadable_files() ) );
+
 		return $this->archive_verified = true;
 
 	}
 
 	/**
-	 * Generate the array of files to be backed up by looping through
-	 * root, ignore unreadable files and excludes
+	 * Return an array of all files in the filesystem
 	 *
 	 * @access public
 	 * @return array
@@ -946,44 +974,11 @@ class WPR_HM_Backup {
 
 		$this->files = array();
 
-		if ( defined( 'RecursiveDirectoryIterator::FOLLOW_SYMLINKS' ) ) {
+		if ( defined( 'RecursiveDirectoryIterator::FOLLOW_SYMLINKS' ) )
+			$this->files = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $this->get_root(), RecursiveDirectoryIterator::FOLLOW_SYMLINKS ), RecursiveIteratorIterator::SELF_FIRST, RecursiveIteratorIterator::CATCH_GET_CHILD );
 
-			$filesystem = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $this->get_root(), RecursiveDirectoryIterator::FOLLOW_SYMLINKS ), RecursiveIteratorIterator::SELF_FIRST, RecursiveIteratorIterator::CATCH_GET_CHILD );
-
-			$excludes = $this->exclude_string( 'regex' );
-
-			foreach ( $filesystem as $file ) {
-
-		    	/*
-		    	 * Ignore current dir and containing dir
-		    	 *
-		    	 * Required because in PHP 5.2 these aren't skipped automatically by RecursiveDirectoryIterator, they are skipped in PHP > 5.3
-		    	 */
-		    	if ( $file === '.' || $file === '..' )
-		    		continue;
-
-				// Track & skip unreadable files
-			    if ( ! $file->isReadable() && $this->unreadable_files[] = $file )
-			        continue;
-
-			    $pathname = str_ireplace( trailingslashit( $this->get_root() ), '', $this->conform_dir( $file->getPathname() ) );
-
-			    // Excludes
-			    if ( $excludes && preg_match( '(' . $excludes . ')', $pathname ) && $this->excluded_files[] = $file )
-			        continue;
-
-			    $this->files[] = $file;
-
-			}
-
-		} else {
-
-			$this->files = $this->files_fallback( $this->get_root() );
-
-		}
-
-		if ( ! empty( $this->unreadable_files ) )
-			$this->warning( $this->get_archive_method(), __( 'The following files are unreadable and couldn\'t be backed up: ', 'hmbkp' ) . implode( ', ', $this->unreadable_files ) );
+		else
+			$this->files = $this->get_files_fallback( $this->get_root() );
 
 		return $this->files;
 
@@ -1000,7 +995,7 @@ class WPR_HM_Backup {
 	 * @param array $files. (default: array())
 	 * @return array
 	 */
-	private function files_fallback( $dir, $files = array() ) {
+	private function get_files_fallback( $dir, $files = array() ) {
 
 	    $handle = opendir( $dir );
 
@@ -1008,29 +1003,95 @@ class WPR_HM_Backup {
 
 	    while ( $file = readdir( $handle ) ) :
 
-	    	// Ignore current dir and containing dir and any unreadable files or directories
+	    	// Ignore current dir and containing dir
 	    	if ( $file === '.' || $file === '..' )
 	    		continue;
 
-	    	$filepath = $this->conform_dir( trailingslashit( $dir ) . $file );
+	    	$filepath = self::conform_dir( trailingslashit( $dir ) . $file );
 	    	$file = str_ireplace( trailingslashit( $this->get_root() ), '', $filepath );
-
-			// Track & skip unreadable files
-	    	if ( ! is_readable( $filepath ) && $this->unreadable_files[] = new SplFileInfo( $filepath ) )
-				continue;
-
-	    	// Skip the backups dir and any excluded paths
-	    	if ( ( $excludes && preg_match( '(' . $excludes . ')', $file ) ) && $this->excluded_files[] = new SplFileInfo( $filepath ) )
-	    		continue;
 
 	    	$files[] = new SplFileInfo( $filepath );
 
 	    	if ( is_dir( $filepath ) )
-	    		$files = $this->files_fallback( $filepath, $files );
+	    		$files = $this->get_files_fallback( $filepath, $files );
 
 		endwhile;
 
 		return $files;
+
+	}
+
+	/**
+	 * Returns an array of files that will be included in the backup.
+	 *
+	 * @access public
+	 * @return array
+	 */
+	public function get_included_files() {
+
+		if ( ! empty( $this->included_files ) )
+			return $this->included_files;
+
+		$this->included_files = array();
+
+		$excludes = $this->exclude_string( 'regex' );
+
+		foreach ( $this->get_files() as $file ) {
+
+			// Skip dot files, they should only exist on versions of PHP between 5.2.11 -> 5.3
+			if ( method_exists( $file, 'isDot' ) && $file->isDot() )
+				continue;
+
+			// Skip unreadable files
+			if ( ! $file->isReadable() )
+				continue;
+
+		    // Excludes
+		    if ( $excludes && preg_match( '(' . $excludes . ')', str_ireplace( trailingslashit( $this->get_root() ), '', self::conform_dir( $file->getPathname() ) ) ) )
+		    	continue;
+
+		    $this->included_files[] = $file;
+
+		}
+
+		return $this->included_files;
+
+	}
+
+	/**
+	 * Return the number of files included in the backup
+	 *
+	 * @access public
+	 * @return array
+	 */
+	public function get_included_file_count() {
+
+		if ( ! empty( $this->included_file_count ) )
+			return $this->included_file_count;
+
+		$this->included_file_count = 0;
+
+		$excludes = $this->exclude_string( 'regex' );
+
+		foreach ( $this->get_files() as $file ) {
+
+			// Skip dot files, they should only exist on versions of PHP between 5.2.11 -> 5.3
+			if ( method_exists( $file, 'isDot' ) && $file->isDot() )
+				continue;
+
+			// Skip unreadable files
+			if ( ! $file->isReadable() )
+				continue;
+
+		    // Excludes
+		    if ( $excludes && preg_match( '(' . $excludes . ')', str_ireplace( trailingslashit( $this->get_root() ), '', self::conform_dir( $file->getPathname() ) ) ) )
+		    	continue;
+
+		    $this->included_file_count++;
+
+		}
+
+		return $this->included_file_count;
 
 	}
 
@@ -1042,13 +1103,65 @@ class WPR_HM_Backup {
 	 */
 	public function get_excluded_files() {
 
-		if ( empty( $this->files ) )
-			$this->get_files();
-
 		if ( ! empty( $this->excluded_files ) )
 			return $this->excluded_files;
 
-		return array();
+		$this->excluded_files = array();
+
+		$excludes = $this->exclude_string( 'regex' );
+
+		foreach ( $this->get_files() as $file ) {
+
+			// Skip dot files, they should only exist on versions of PHP between 5.2.11 -> 5.3
+			if ( method_exists( $file, 'isDot' ) && $file->isDot() )
+				continue;
+
+			// Skip unreadable files
+			if ( ! $file->isReadable() )
+				continue;
+
+		    // Excludes
+		    if ( $excludes && preg_match( '(' . $excludes . ')', str_ireplace( trailingslashit( $this->get_root() ), '', self::conform_dir( $file->getPathname() ) ) ) )
+		    	$this->excluded_files[] = $file;
+
+		}
+
+		return $this->excluded_files;
+
+	}
+
+	/**
+	 * Return the number of files excluded from the backup
+	 *
+	 * @access public
+	 * @return array
+	 */
+	public function get_excluded_file_count() {
+
+		if ( ! empty( $this->excluded_file_count ) )
+			return $this->excluded_file_count;
+
+		$this->excluded_file_count = 0;
+
+		$excludes = $this->exclude_string( 'regex' );
+
+		foreach ( $this->get_files() as $file ) {
+
+			// Skip dot files, they should only exist on versions of PHP between 5.2.11 -> 5.3
+			if ( method_exists( $file, 'isDot' ) && $file->isDot() )
+				continue;
+
+			// Skip unreadable files
+			if ( ! $file->isReadable() )
+				continue;
+
+		    // Excludes
+		    if ( $excludes && preg_match( '(' . $excludes . ')', str_ireplace( trailingslashit( $this->get_root() ), '', self::conform_dir( $file->getPathname() ) ) ) )
+		    	$this->excluded_file_count++;
+
+		}
+
+		return $this->excluded_file_count;
 
 	}
 
@@ -1060,13 +1173,51 @@ class WPR_HM_Backup {
 	 */
 	public function get_unreadable_files() {
 
-		if ( empty( $this->files ) )
-			$this->get_files();
-
 		if ( ! empty( $this->unreadable_files ) )
 			return $this->unreadable_files;
 
-		return array();
+		$this->unreadable_files = array();
+
+		foreach ( $this->get_files() as $file ) {
+
+			// Skip dot files, they should only exist on versions of PHP between 5.2.11 -> 5.3
+			if ( method_exists( $file, 'isDot' ) && $file->isDot() )
+				continue;
+
+		    if ( ! $file->isReadable() )
+		    	$this->unreadable_files[] = $file;
+
+		}
+
+		return $this->unreadable_files;
+
+	}
+
+	/**
+	 * Return the number of unreadable files.
+	 *
+	 * @access public
+	 * @return array
+	 */
+	public function get_unreadable_file_count() {
+
+		if ( ! empty( $this->get_unreadable_file_count ) )
+			return $this->get_unreadable_file_count;
+
+		$this->get_unreadable_file_count = 0;
+
+		foreach ( $this->get_files() as $file ) {
+
+			// Skip dot files, they should only exist on versions of PHP between 5.2.11 -> 5.3
+			if ( method_exists( $file, 'isDot' ) && $file->isDot() )
+				continue;
+
+		    if ( ! $file->isReadable() )
+		    	$this->get_unreadable_file_count++;
+
+		}
+
+		return $this->get_unreadable_file_count;
 
 	}
 
@@ -1097,7 +1248,7 @@ class WPR_HM_Backup {
 
 		// If path() is inside root(), exclude it
 		if ( strpos( $this->get_path(), $this->get_root() ) !== false )
-			$excludes[] = trailingslashit( $this->get_path() );
+			array_unshift( $excludes, trailingslashit( $this->get_path() ) );
 
 		return array_unique( $excludes );
 
@@ -1132,7 +1283,7 @@ class WPR_HM_Backup {
 	 * @param string $context. (default: 'zip')
 	 * @return string
 	 */
-	private function exclude_string( $context = 'zip' ) {
+	public function exclude_string( $context = 'zip' ) {
 
 		// Return a comma separated list by default
 		$separator = ', ';
@@ -1169,7 +1320,7 @@ class WPR_HM_Backup {
 				$fragment = true;
 
 			// Strip $this->root and conform
-			$rule = str_ireplace( $this->get_root(), '', untrailingslashit( $this->conform_dir( $rule ) ) );
+			$rule = str_ireplace( $this->get_root(), '', untrailingslashit( self::conform_dir( $rule ) ) );
 
 			// Strip the preceeding slash
 			if ( in_array( substr( $rule, 0, 1 ), array( '\\', '/' ) ) )
@@ -1210,7 +1361,7 @@ class WPR_HM_Backup {
 	}
 
 	/**
-	 * Add backquotes to tables and db-names inSQL queries. Taken from phpMyAdmin.
+	 * Add backquotes to tables and db-names in SQL queries. Taken from phpMyAdmin.
 	 *
 	 * @access private
 	 * @param mixed $a_name
@@ -1419,7 +1570,7 @@ class WPR_HM_Backup {
 	    // Actually write the sql file
 	    if ( is_writable( $sqlname ) || ! file_exists( $sqlname ) ) {
 
-	    	if ( ! $handle = fopen( $sqlname, 'a' ) )
+	    	if ( ! $handle = @fopen( $sqlname, 'a' ) )
 	    		return;
 
 	    	if ( ! fwrite( $handle, $sql ) )
@@ -1446,7 +1597,6 @@ class WPR_HM_Backup {
 		return $this->errors;
 
 	}
-
 
 	/**
 	 * Add an error to the errors stack
@@ -1503,7 +1653,6 @@ class WPR_HM_Backup {
 
 	}
 
-
 	/**
 	 * Add an warning to the warnings stack
 	 *
@@ -1519,7 +1668,6 @@ class WPR_HM_Backup {
 		$this->warnings[$context][$_key = md5( implode( ':' , (array) $warning ) )] = $warning;
 
 	}
-
 
 	/**
 	 * Custom error handler for catching errors
@@ -1555,16 +1703,16 @@ class WPR_HM_Backup {
  * @param array &$file
  * @return bool
  */
-function wpr_hmbkp_pclzip_callback( $event, &$file ) {
+function hmbkp_pclzip_callback( $event, &$file ) {
 
-	global $_wpr_hmbkp_exclude_string;
+	global $_hmbkp_exclude_string;
 
     // Don't try to add unreadable files.
     if ( ! is_readable( $file['filename'] ) || ! file_exists( $file['filename'] ) )
     	return false;
 
     // Match everything else past the exclude list
-    elseif ( $_wpr_hmbkp_exclude_string && preg_match( '(' . $_wpr_hmbkp_exclude_string . ')', $file['stored_filename'] ) )
+    elseif ( $_hmbkp_exclude_string && preg_match( '(' . $_hmbkp_exclude_string . ')', $file['stored_filename'] ) )
     	return false;
 
     return true;
