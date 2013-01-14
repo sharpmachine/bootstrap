@@ -192,8 +192,9 @@ class acf_everything_fields
 		}
 		
 		
-		// find metabox id's for this page
-		$this->data['metabox_ids'] = $this->parent->get_input_metabox_ids( $options , false );
+		// get field groups
+		$metabox_ids = array();
+		$this->data['metabox_ids'] = apply_filters( 'acf/location/match_field_groups', $metabox_ids, $options );
 
 		
 		// dont continue if no ids were found
@@ -488,13 +489,13 @@ class acf_everything_fields
 					// required
 					if(!isset($field['required']))
 					{
-						$field['required'] = "0";
+						$field['required'] = 0;
 					}
 					
 					$required_class = "";
 					$required_label = "";
 					
-					if($field['required'] == "1")
+					if( $field['required'] )
 					{
 						$required_class = ' required';
 						$required_label = ' <span class="required">*</span>';

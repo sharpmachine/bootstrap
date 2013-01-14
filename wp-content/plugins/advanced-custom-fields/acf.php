@@ -3,7 +3,7 @@
 Plugin Name: Advanced Custom Fields
 Plugin URI: http://www.advancedcustomfields.com/
 Description: Fully customise WordPress edit screens with powerful fields. Boasting a professional interface and a powerfull API, it’s a must have for any web developer working with WordPress. Field types include: Wysiwyg, text, textarea, image, file, select, checkbox, page link, post object, date picker, color picker, repeater, flexible content, gallery and more!
-Version: 3.5.4.1
+Version: 3.5.7.2
 Author: Elliot Condon
 Author URI: http://www.elliotcondon.com/
 License: GPL
@@ -33,7 +33,8 @@ class Acf
 		$input,
 		$options_page,
 		$everything_fields,
-		$third_party;
+		$third_party,
+		$location;
 	
 	
 	/*
@@ -50,7 +51,7 @@ class Acf
 		// vars
 		$this->path = plugin_dir_path(__FILE__);
 		$this->dir = plugins_url('',__FILE__);
-		$this->version = '3.5.4.1';
+		$this->version = '3.5.7.2';
 		$this->upgrade_version = '3.4.1'; // this is the latest version which requires an upgrade
 		$this->cache = array(); // basic array cache to hold data throughout the page load
 		$this->defaults = array(
@@ -84,12 +85,9 @@ class Acf
 		
 		
 		// filters
-		add_filter('acf_load_field', array($this, 'acf_load_field_defaults'), 5);
+		add_filter('acf_load_field', array($this, 'acf_load_field'), 5);
 		add_filter('post_updated_messages', array($this, 'post_updated_messages'));
-		
-		
-		// ajax
-		add_action('wp_ajax_get_input_metabox_ids', array($this, 'get_input_metabox_ids'));
+		add_filter('acf_parse_value', array($this, 'acf_parse_value'));
 		
 		
 		return true;
@@ -131,6 +129,7 @@ class Acf
 		    'not_found' =>  __('No Field Groups found', 'acf'),
 		    'not_found_in_trash' => __('No Field Groups found in Trash', 'acf'), 
 		);
+		
 		
 		register_post_type('acf', array(
 			'labels' => $labels,
@@ -245,6 +244,7 @@ class Acf
 		
 		// include child fields
 		include_once('core/fields/acf_field.php');
+		include_once('core/fields/tab.php');
 		include_once('core/fields/text.php');
 		include_once('core/fields/textarea.php');
 		include_once('core/fields/wysiwyg.php');
@@ -264,6 +264,7 @@ class Acf
 		
 		// add child fields
 		$this->fields['none'] = new acf_Field($this); 
+		$this->fields['tab'] = new acf_Tab($this); 
 		$this->fields['text'] = new acf_Text($this); 
 		$this->fields['textarea'] = new acf_Textarea($this); 
 		$this->fields['wysiwyg'] = new acf_Wysiwyg($this); 
@@ -370,6 +371,11 @@ class Acf
 		// Third Party Compatibility
 		include_once('core/controllers/third_party.php');
 		$this->third_party = new acf_third_party($this);
+		
+		
+		// Location
+		include_once('core/controllers/location.php');
+		$this->location = new acf_location($this);
 	}
 	
 	
@@ -433,10 +439,10 @@ class Acf
 	{
 		// hide upgrade page from nav
 		echo '<style type="text/css"> 
-			#toplevel_page_edit-post_type-acf a[href="edit.php?post_type=acf&page=acf-upgrade"]{ display:none; }
-			#toplevel_page_edit-post_type-acf .wp-menu-image { background: url("../wp-admin/images/menu.png") no-repeat scroll 0 -33px transparent; }
-			#toplevel_page_edit-post_type-acf:hover .wp-menu-image { background-position: 0 -1px; }
-			#toplevel_page_edit-post_type-acf .wp-menu-image img { display:none; }
+			#adminmenu #toplevel_page_edit-post_type-acf a[href="edit.php?post_type=acf&page=acf-upgrade"]{ display:none; }
+			#adminmenu #toplevel_page_edit-post_type-acf .wp-menu-image { background-position: 1px -33px; }
+			#adminmenu #toplevel_page_edit-post_type-acf:hover .wp-menu-image,
+			#adminmenu #toplevel_page_edit-post_type-acf.wp-menu-open .wp-menu-image { background-position: 1px -1px; }
 		</style>';
 	}
 	
@@ -673,14 +679,14 @@ class Acf
 	
 	
 	/*
-	*  acf_load_field_defaults
+	*  acf_load_field
 	*
 	*  @description: 
 	*  @since 3.5.1
 	*  @created: 14/10/12
 	*/
 	
-	function acf_load_field_defaults( $field )
+	function acf_load_field( $field )
 	{
 		if( !is_array($field) )
 		{
@@ -692,20 +698,72 @@ class Acf
 			'label' => '',
 			'name' => '',
 			'type' => 'text',
-			'order_no' =>	'1',
+			'order_no' =>	1,
 			'instructions' =>	'',
-			'required' => '0',
+			'required' => 0,
 			'conditional_logic' => array(
-				'status' => '0',
+				'status' => 0,
 				'allorany' => 'all',
-				'rules' => false
+				'rules' => 0
 			),
 		);
 		
 		$field = array_merge($defaults, $field);
 		
+		
+		// Parse Values
+		$field = apply_filters( 'acf_parse_value', $field );
+		
+		
+		// trim name
+		$field['name'] = trim( $field['name'] );
+		
+		
 		return $field;
 	}
+	
+	
+	/*
+	*  acf_parse_value
+	*
+	*  @description: 
+	*  @since: 2.0.4
+	*  @created: 9/12/12
+	*/
+	
+	function acf_parse_value( $value )
+	{
+		
+		// is value another array?
+		if( is_array($value) )
+		{
+			foreach( $value as $k => $v )
+			{
+				$value[ $k ] = apply_filters( 'acf_parse_value', $v );
+			}	
+		}
+		else
+		{
+			// numbers
+			if( is_numeric($value) )
+			{
+				// float / int
+				if( strpos($value,'.') !== false )
+				{
+					$value = floatval( $value );
+				}
+				else
+				{
+					$value = intval( $value );
+				}
+			}
+		}
+		
+		
+		// return
+		return $value;
+	}
+	
 	
 	/*--------------------------------------------------------------------------------------
 	*
@@ -727,24 +785,23 @@ class Acf
 		
 		
 		// defaults - class
-		if( !isset($field['class']) )
+		if( ! isset($field['class']) )
 		{
 			$field['class'] = $field['type'];
 		}
 		
 		
 		// defaults - id
-		// - isset is needed for the edit field group page where fields are created without many parameters
-		if( !isset($field['id']) )
+		if( ! isset($field['id']) )
 		{
-			if( isset($field['key']) )
-			{
-				$field['id'] = 'acf-' . $field['key'];
-			}
-			else
-			{
-				$field['id'] = 'acf-' . $field['name'];
-			}
+			$id = $field['name'];
+			$id = str_replace('][', '_', $id);
+			$id = str_replace('fields[', '', $id);
+			$id = str_replace('[', '-', $id); // location rules (select) does'nt have "fields[" in it
+			$id = str_replace(']', '', $id);
+			
+			
+			$field['id'] = 'acf-' . $id;
 		}
 		
 		
@@ -753,7 +810,7 @@ class Acf
 
 		// conditional logic
 		// - isset is needed for the edit field group page where fields are created without many parameters
-		if( isset($field['conditional_logic']) && $field['conditional_logic']['status'] == '1' ):
+		if( isset($field['conditional_logic']['status']) && $field['conditional_logic']['status'] ):
 		
 			$join = ' && ';
 			if( $field['conditional_logic']['allorany'] == "any" )
@@ -780,11 +837,11 @@ class Acf
 ?>
 		if(<?php echo implode( $join, $if ); ?>)
 		{
-			field.show();
+			field.removeClass('acf-conditional_logic-hide').addClass('acf-conditional_logic-show');
 		}
 		else
 		{
-			field.hide();
+			field.removeClass('acf-conditional_logic-show').addClass('acf-conditional_logic-hide');
 		}
 		
 	});
@@ -977,6 +1034,26 @@ class Acf
 	}
 	
 	
+	/*--------------------------------------------------------------------------------------
+	*
+	*	update_field
+	*
+	*	@author Elliot Condon
+	*	@since 3.0.0
+	* 
+	*-------------------------------------------------------------------------------------*/
+	
+	function update_field($post_id, $field)
+	{
+		// apply filters
+		$field = apply_filters('acf_save_field', $field );
+		$field = apply_filters('acf_save_field-' . $field['type'], $field );
+		
+		
+		// save
+		update_post_meta($post_id, $field['key'], $field);
+	}
+	
 	
 	/*--------------------------------------------------------------------------------------
 	*
@@ -1038,13 +1115,13 @@ class Acf
 				$required_class = "";
 				$required_label = "";
 				
-				if($field['required'] == "1")
+				if( $field['required'] )
 				{
 					$required_class = ' required';
 					$required_label = ' <span class="required">*</span>';
 				}
 				
-				echo '<div id="acf-' . $field['name'] . '" class="field field-' . $field['type'] . ' field-'.$field['key'] . $required_class . '">';
+				echo '<div id="acf-' . $field['name'] . '" class="field field-' . $field['type'] . ' field-' . $field['key'] . $required_class . '" data-field_name="' . $field['name'] . '" data-field_key="' . $field['key'] . '">';
 
 					echo '<p class="label">';
 						echo '<label for="fields[' . $field['key'] . ']">' . $field['label'] . $required_label . '</label>';
@@ -1074,46 +1151,46 @@ class Acf
 	* 
 	*-------------------------------------------------------------------------------------*/
 	
-	function get_input_metabox_ids($overrides = array(), $json = true)
+	function get_input_metabox_ids( $options = array() )
 	{
-		// overrides
-		if(isset($_POST))
+		// vars
+		$defaults = array(
+			'post_id' => 0,
+			'post_type' => 0,
+			'page_template' => 0,
+			'page_parent' => 0,
+			'page_type' => 0,
+			'page' => 0,
+			'post' => 0,
+			'post_category' => 0,
+			'post_format' => 0,
+			'taxonomy' => 0,
+			'lang' => 0,
+			'return' => 'php'
+		);
+		
+		
+		// merge in $options
+		$options = array_merge($defaults, $options);
+		
+		
+		// merge in $_POST
+		if( isset($_POST) )
 		{
-			$override_keys = array(
-				'post_id',
-				'post_type',
-				'page_template',
-				'page_parent',
-				'page_type',
-				'page',
-				'post',
-				'post_category',
-				'post_format',
-				'taxonomy',
-				'lang',
-			);
-
-			foreach( $override_keys as $override_key )
-			{
-				if( isset($_POST[ $override_key ]) && $_POST[ $override_key ] != 'false' )
-				{
-					$overrides[ $override_key ] = $_POST[ $override_key ];
-				}
-			}
-
+			$options = array_merge($options, $_POST);
 		}
+		
+		
+		// Parse values
+		$options = apply_filters( 'acf_parse_value', $options );
 		
 
 		// WPML
-		if( isset($overrides['lang']) )
+		if( $options['lang'] )
 		{
 			global $sitepress;
-			$sitepress->switch_lang( $overrides['lang'] );
+			$sitepress->switch_lang( $options['lang'] );
 		}
-		
-		
-		// create post object to match against
-		$post = isset($overrides['post_id']) ? get_post($overrides['post_id']) : false;
 		
 		
 		// find all acf objects
@@ -1123,51 +1200,60 @@ class Acf
 		// blank array to hold acfs
 		$return = array();
 		
-		if($acfs)
+		
+		if( $acfs )
 		{
-			foreach($acfs as $acf)
+			foreach( $acfs as $acf )
 			{
+				// vars
 				$add_box = false;
-
-				if($acf['location']['allorany'] == 'all')
+				
+				
+				// if all of the rules are required to match, start at true and let any !$match set $add_box to false
+				if( $acf['location']['allorany'] == 'all' )
 				{
-					// ALL
 					$add_box = true;
-					
-					if($acf['location']['rules'])
-					{
-						foreach($acf['location']['rules'] as $rule)
-						{
-							
-							// if any rules dont return true, dont add this acf
-							if(!$this->match_location_rule($post, $rule, $overrides))
-							{
-								$add_box = false;
-							}
-						}
-					}
-					
 				}
-				elseif($acf['location']['allorany'] == 'any')
+						
+				
+				if( $acf['location']['rules'] )
 				{
-					// ANY
+					// defaults
+					$rule_defaults = array(
+						'param' => '',
+						'operator' => '==',
+						'value' => ''
+					);
 					
-					$add_box = false;
-					
-					if($acf['location']['rules'])
+					foreach($acf['location']['rules'] as $rule)
 					{
-						foreach($acf['location']['rules'] as $rule)
+						// make sure rule has all 3 keys
+						$rule = array_merge( $rule_defaults, $rule );
+						
+						
+						// $match = true / false
+						$match = false;
+						$match = apply_filters( 'acf/location_rules/match/' . $rule['param'] , $match, $rule, $options );
+						
+						
+						if( $acf['location']['allorany'] == 'all' && !$match )
 						{
-							// if any rules return true, add this acf
-							if($this->match_location_rule($post, $rule, $overrides))
-							{
-								$add_box = true;
-							}
+							// if all of the rules are required to match and this rule did not, don't add this box!
+							$add_box = false;
 						}
+						elseif($acf['location']['allorany'] == 'any' && $match )
+						{
+							// if any of the rules are required to match and this rule did, add this box!
+							$add_box = true;
+						}
+						
+						
 					}
 				}
-							
-				if($add_box == true)
+					
+				
+				// add ID to array	
+				if( $add_box )
 				{
 					$return[] = $acf['id'];
 				}
@@ -1175,603 +1261,17 @@ class Acf
 			}
 		}
 		
-		if($json)
+		
+		// if json
+		if( $options['return'] == 'json' )
 		{
 			echo json_encode($return);
 			die;
 		}
-		else
-		{
-			return $return;
-		}
 		
 		
-	}
-	
-	
-	
-	
-	
-	/*--------------------------------------------------------------------------------------
-	*
-	*	match_location_rule
-	*
-	*	@author Elliot Condon
-	*	@since 2.0.0
-	* 
-	*-------------------------------------------------------------------------------------*/
-
-	function match_location_rule($post = null, $rule = array(), $overrides = array())
-	{
-		
-		// no post? Thats okay if you are one of the bellow exceptions. Otherwise, return false
-		if(!$post)
-		{
-			$exceptions = array(
-				'user_type',
-				'options_page',
-				'ef_taxonomy',
-				'ef_user',
-				'ef_media',
-				'post_type',
-			);
-			
-			if( !in_array($rule['param'], $exceptions) )
-			{
-				return false;
-			}
-		}
-		
-		
-		if(!isset($rule['value']))
-		{
-			return false;
-		}
-		
-		
-		switch ($rule['param']) {
-		
-			// POST TYPE
-		    case "post_type":
-		    
-		    	$post_type = isset($overrides['post_type']) ? $overrides['post_type'] : get_post_type($post);
-		        
-		        if($rule['operator'] == "==")
-		        {
-		        	if($post_type == $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if($post_type != $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        
-		        break;
-		        
-		    // PAGE
-		    case "page":
-		        
-		        $page = isset($overrides['page']) ? $overrides['page'] : $post->ID;
-		        
-		        if($rule['operator'] == "==")
-		        {
-		        	if($page == $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if($page != $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        
-		        break;
-		        
-			// PAGE
-		    case "page_type":
-		        
-		        $page = isset($overrides['page']) ? $overrides['page'] : $post->ID;
-		        
-		        if( $rule['value'] == 'front_page')
-		        {
-			        $front_page = (int) get_option('page_on_front');
-			        
-			        if( $rule['operator'] == "==" )
-			        {
-			        	if( $front_page == $page )
-			        	{
-				        	return true;
-			        	}
-			        }
-			        elseif( $rule['operator'] == "!=" )
-			        {
-			        	if( $front_page != $page )
-			        	{
-				        	return true;
-			        	}
-			        }
-			        
-			        return false;
-		        }
-		        
-		        
-		        if( $rule['value'] == 'posts_page')
-		        {
-			        $posts_page = (int) get_option('page_for_posts');
-			        
-			        if( $rule['operator'] == "==" )
-			        {
-			        	if( $posts_page == $page )
-			        	{
-				        	return true;
-			        	}
-			        }
-			        elseif( $rule['operator'] == "!=" )
-			        {
-			        	if( $posts_page != $page )
-			        	{
-				        	return true;
-			        	}
-			        }
-			        
-			        return false;
-		        }
-		        
-		        
-		        if( $rule['value'] == 'parent')
-		        {
-		        	$children = get_pages(array(
-		        		'post_type' => $post->post_type,
-		        		'child_of' =>  $post->ID,
-		        	));
-		        	
-			        
-			        if( $rule['operator'] == "==" )
-			        {
-			        	if( count($children) > 0 )
-			        	{
-				        	return true;
-			        	}
-			        }
-			        elseif( $rule['operator'] == "!=" )
-			        {
-			        	if( count($children) == 0 )
-			        	{
-				        	return true;
-			        	}
-			        }
-			        
-			        return false;
-		        }
-		        
-		        
-		        if( $rule['value'] == 'child')
-		        {
-		        	$post_parent = $post->post_parent;
-		        	if( isset($overrides['page_parent']) )
-		        	{
-			        	$post_parent = (int) $overrides['page_parent'];
-		        	}
-			        
-			        if( $rule['operator'] == "==" )
-			        {
-			        	if( $post_parent != 0 )
-			        	{
-				        	return true;
-			        	}
-			        }
-			        elseif( $rule['operator'] == "!=" )
-			        {
-			        	if( $post_parent == 0 )
-			        	{
-				        	return true;
-			        	}
-			        }
-			        
-			        return false;
-		        }
-		        
-		        		        
-		        break;
-		        
-		    // PAGE PARENT
-		    case "page_parent":
-		        
-		        $page_parent = isset($overrides['page_parent']) ? $overrides['page_parent'] : $post->post_parent;
-		        
-		        if($rule['operator'] == "==")
-		        {
-		        	if($page_parent == $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        	
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if($page_parent != $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        
-		        break;
-		    
-		    // PAGE
-		    case "page_template":
-		        
-		        $page_template = isset($overrides['page_template']) ? $overrides['page_template'] : get_post_meta($post->ID,'_wp_page_template',true);
-		        
-		        if($rule['operator'] == "==")
-		        {
-		        	if($page_template == $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	if($rule['value'] == "default" && !$page_template)
-		        	{
-		        		return true;
-		        	}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if($page_template != $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        
-		        break;
-		       
-		    // POST
-		    case "post":
-		        
-		        $post_id = isset($overrides['post']) ? $overrides['post'] : $post->ID;
-		        
-		        if($rule['operator'] == "==")
-		        {
-		        	if($post_id == $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if($post_id != $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        
-		        break;
-		        
-		    // POST CATEGORY
-		    case "post_category":
-		        
-		        $cats = array();
-		        
-		        if(isset($overrides['post_category']))
-		        {
-		        	$cats = $overrides['post_category'];
-		        }
-		        else
-		        {
-		        	$all_cats = get_the_category($post->ID);
-		        	foreach($all_cats as $cat)
-					{
-						$cats[] = $cat->term_id;
-					}
-		        }
-		        if($rule['operator'] == "==")
-		        {
-		        	if($cats)
-					{
-						if(in_array($rule['value'], $cats))
-						{
-							return true; 
-						}
-					}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if($cats)
-					{
-						if(!in_array($rule['value'], $cats))
-						{
-							return true; 
-						}
-					}
-		        	
-		        	return false;
-		        }
-		        
-		        break;
-			
-			
-			// USER TYPE
-		    case "user_type":
-		        		
-		        if($rule['operator'] == "==")
-		        {
-		        	if(current_user_can($rule['value']))
-		        	{
-		        		return true;
-		        	}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if(!current_user_can($rule['value']))
-		        	{
-		        		return true;
-		        	}
-		        	
-		        	return false;
-		        }
-		        
-		        break;
-		    
-		    // Options Page
-		    case "options_page":
-		    	
-		    	global $plugin_page;
-		    	
-		    	
-				// older location rules may be "options-pagename"
-				if( substr($rule['value'], 0, 8) == 'options-' )
-				{
-					$rule['value'] = 'acf-' . $rule['value'];
-				}
-				
-				
-				// older location ruels may be "Pagename"
-				if( substr($rule['value'], 0, 11) != 'acf-options' )
-				{
-					$rule['value'] = 'acf-options-' . sanitize_title( $rule['value'] );
-					
-					// value may now be wrong (acf-options-options)
-					if( $rule['value'] == 'acf-options-options' )
-					{
-						$rule['value'] = 'acf-options';
-					}
-				}
-				
-				
-		        if($rule['operator'] == "==")
-		        {
-		        	if( $plugin_page == $rule['value'] )
-		        	{
-		        		return true;
-		        	}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if( $plugin_page == $rule['value'] )
-		        	{
-		        		return true;
-		        	}
-		        	
-		        	return false;
-		        }
-		        
-		        break;
-		    
-		    
-		    // Post Format
-		    case "post_format":
-		        
-		       	
-		       	$post_format = isset($overrides['post_format']) ? $overrides['post_format'] : get_post_format( $post->ID );
-		        if($post_format == "0") $post_format = "standard";
-		        
-		        if($rule['operator'] == "==")
-		        {
-		        	if($post_format == $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if($post_format != $rule['value'])
-		        	{
-		        		return true; 
-		        	}
-		        	
-		        	return false;
-		        }
-		        
-		        
-		        break;
-		    
-		    // Taxonomy
-		    case "taxonomy":
-		        
-		        $terms = array();
-
-		        if(isset($overrides['taxonomy']))
-		        {
-		        	$terms = $overrides['taxonomy'];
-		        }
-		        else
-		        {
-		        	$taxonomies = get_object_taxonomies($post->post_type);
-		        	if($taxonomies)
-		        	{
-			        	foreach($taxonomies as $tax)
-						{
-							$all_terms = get_the_terms($post->ID, $tax);
-							if($all_terms)
-							{
-								foreach($all_terms as $all_term)
-								{
-									$terms[] = $all_term->term_id;
-								}
-							}
-						}
-					}
-		        }
-		        
-		        if($rule['operator'] == "==")
-		        {
-		        	if($terms)
-					{
-						if(in_array($rule['value'], $terms))
-						{
-							return true; 
-						}
-					}
-		        	
-		        	return false;
-		        }
-		       elseif($rule['operator'] == "!=")
-		        {
-		        	if($terms)
-					{
-						if(!in_array($rule['value'], $terms))
-						{
-							return true; 
-						}
-					}
-		        	
-		        	return false;
-		        }
-		        
-		        
-		        break;
-			
-			// Everything Fields: Taxonomy
-		    case "ef_taxonomy":
-		       	
-		       	if( !isset($overrides['ef_taxonomy']) )
-		       	{
-		       		return false;
-		       	}
-		       	
-		       	$ef_taxonomy = $overrides['ef_taxonomy'];
-				
-		        if($rule['operator'] == "==")
-		        {
-		        	if( $ef_taxonomy == $rule['value'] || $rule['value'] == "all" )
-		       		{
-		       			return true; 
-		       		}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if( $ef_taxonomy != $rule['value'] || $rule['value'] == "all" )
-		       		{
-		       			return true; 
-		       		}
-		        	
-		        	return false;
-		        }
-		        
-		        
-		        break;
-			
-			// Everything Fields: User
-		    case "ef_user":
-		       	
-		       	if( !isset($overrides['ef_user']) )
-		       	{
-		       		return false;
-		       	}
-		       	
-		       	$ef_user = $overrides['ef_user'];
-				
-		        if($rule['operator'] == "==")
-		        {
-		        	if( user_can($ef_user, $rule['value']) || $rule['value'] == "all" )
-		       		{
-		       			return true; 
-		       		}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if( user_can($ef_user, $rule['value']) || $rule['value'] == "all" )
-		       		{
-		       			return true; 
-		       		}
-		        	
-		        	return false;
-		        }
-		        
-		        
-		        break;
-			
-			// Everything Fields: Media
-		    case "ef_media":
-		       	
-		       	if( !isset($overrides['ef_media']) )
-		       	{
-		       		return false;
-		       	}
-		       	
-		       	$ef_media = $overrides['ef_media'];
-				
-		        if($rule['operator'] == "==")
-		        {
-		        	if( $rule['value'] == "all" )
-		       		{
-		       			return true; 
-		       		}
-		        	
-		        	return false;
-		        }
-		        elseif($rule['operator'] == "!=")
-		        {
-		        	if( $rule['value'] == "all" )
-		       		{
-		       			return true; 
-		       		}
-		        	
-		        	return false;
-		        }
-		        
-		        
-		        break;
-		}
+		// not json, normal return
+		return $return;
 		
 	}
 	
@@ -2015,5 +1515,100 @@ class Acf
 		
 		return ' (' . $lang . ')';
 	}*/
+	
+	
+	/*
+	*  get_post_types
+	*
+	*  @description: 
+	*  @since: 3.5.5
+	*  @created: 16/12/12
+	*/
+	
+	function get_post_types( $exclude = array(), $include = array() )
+	{
+		// get all custom post types
+		$post_types = get_post_types();
+		
+		
+		// core include / exclude
+		$acf_includes = array_merge( array(), $include );
+		$acf_excludes = array_merge( array( 'acf', 'revision', 'nav_menu_item' ), $exclude );
+	 
+		
+		// include
+		foreach( $acf_includes as $p )
+		{					
+			if( post_type_exists($p) )
+			{							
+				$post_types[ $p ] = $p;
+			}
+		}
+		
+		
+		// exclude
+		foreach( $acf_excludes as $p )
+		{
+			unset( $post_types[ $p ] );
+		}
+	 
+		return $post_types;
+		
+	}
+	
+	
+	/*
+	*  get_next_field_id
+	*
+	*  @description: 
+	*  @since: 3.5.5
+	*  @created: 31/12/12
+	*/
+	
+	function get_next_field_id()
+	{
+		// vars
+		global $wpdb;
+		$exists = true;
+		
+		
+		// get next id
+		$next_id = intval( get_option('acf_next_field_id', 1) );
+		
+			
+		// while doesnt exist
+		while( $exists == true )
+		{
+			// get field from postmeta
+			$row = $wpdb->get_row($wpdb->prepare(
+				"
+				SELECT meta_id 
+				FROM $wpdb->postmeta 
+				WHERE meta_key = %s
+				", 
+				'field_' . $next_id
+			), ARRAY_A );
+			
+			
+			// loop again or break through?
+			if( ! $row )
+			{
+				$exists = false;
+			}
+			else
+			{
+				$next_id++;
+			}
+		}
+		
+		
+		// update the acf_next_field_id
+		update_option('acf_next_field_id', ($next_id + 1) );
+		
+		
+		// return
+		return $next_id;
+	}
+	
 }
 ?>

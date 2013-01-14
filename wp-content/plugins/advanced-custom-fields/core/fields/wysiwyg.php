@@ -165,6 +165,9 @@ class acf_Wysiwyg extends acf_Field
 	
 	function create_field($field)
 	{
+		global $wp_version;
+		
+		
 		// vars
 		$defaults = array(
 			'toolbar'		=>	'full',
@@ -172,13 +175,13 @@ class acf_Wysiwyg extends acf_Field
 		);
 		$field = array_merge($defaults, $field);
 		
-		$id = 'wysiwyg-' . $field['name'];
+		$id = 'wysiwyg-' . $field['id'];
 		
 		
 		?>
 		<div id="wp-<?php echo $id; ?>-wrap" class="acf_wysiwyg wp-editor-wrap" data-toolbar="<?php echo $field['toolbar']; ?>">
 			<?php if($field['media_upload'] == 'yes'): ?>
-				<?php if(get_bloginfo('version') < "3.3"): ?>
+				<?php if( version_compare($wp_version, '3.3', '<') ): ?>
 					<div id="editor-toolbar">
 						<div id="media-buttons" class="hide-if-no-js">
 							<?php do_action( 'media_buttons' ); ?>
