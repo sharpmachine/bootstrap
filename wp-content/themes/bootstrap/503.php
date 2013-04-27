@@ -5,21 +5,18 @@
 <title>Down for Maintenance</title>
 
 <style type="text/css">
-	body
-	{
+	body {
 		background-color: #000;
 		color: #fff;
 		font-family: Arial, Helvetica, sans-serif;
 	}
 	
-	#logo
-	{
+	#logo {
 		width: 355px;
 		margin: 50px auto;
 	}
 	
-	p
-	{
+	p {
 		text-align: center;
 	}
 	
