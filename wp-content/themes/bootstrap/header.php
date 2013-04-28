@@ -27,9 +27,10 @@
 	     	?></title>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
     	<meta name="description" content="">
-    	<meta name="author" content="Sharp Machine Media">
+    	<meta name="author" content="Sharp Machine">
 	
 		<link rel="profile" href="http://gmpg.org/xfn/11" />
+		
     	<!-- Le styles -->
     	<link href="<?php bloginfo('template_directory'); ?>/css/bootstrap.css" rel="stylesheet">
     	<style>
@@ -38,6 +39,7 @@
       	}
     	</style>
     	<link href="<?php bloginfo('template_directory'); ?>/css/responsive.css" rel="stylesheet">
+    	
 		<link rel="pingback" href="<?php bloginfo( 'pingback_url' ); ?>" />
 
     	<!-- Le fav and touch icons -->
@@ -47,7 +49,7 @@
     	<link rel="apple-touch-icon-precomposed" sizes="72x72" href="../assets/ico/apple-touch-icon-72-precomposed.png">
     	<link rel="apple-touch-icon-precomposed" href="../assets/ico/apple-touch-icon-57-precomposed.png">
 
-		<script src="<?php bloginfo('template_directory'); ?>/js/modernizr-1.7.min.js"></script>
+		<script src="<?php bloginfo('template_directory'); ?>/js/modernizr-2.6.2-min.js"></script>
 		<!--[if lte IE 8]><script src="<?php bloginfo('template_directory'); ?>/js/selectivizr-min.js"></script><![endif]-->
 	
 		<?php
@@ -59,30 +61,5 @@
 
 	<body <?php body_class(); ?>>
 
-		<div class="navbar navbar-fixed-top">
-			<div class="navbar-inner">
-				<div class="container">
-					<a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
-            			<span class="icon-bar"></span>
-            			<span class="icon-bar"></span>
-            			<span class="icon-bar"></span>
-					</a>
-					<a class="brand" href="<?php bloginfo('url') ?>"><?php bloginfo('name'); ?></a>
-					<div class="nav-collapse">
-            			<ul class="nav">
-						<?php wp_nav_menu( array( 'theme_location' => 'primary', 'container' => false, 'menu_class' => 'nav', 'walker' => new Bootstrap_Menu_Walker ) ); ?>
-            			</ul>
-					</div><!--/.nav-collapse -->
-        		</div>
-			</div>
-    	</div>
-
-		<!-- Breadcrumbs NavXT-->
-		<div class="breadcrumbs">
-			<?php
-			if(function_exists('bcn_display'))
-			{
-		    	bcn_display();
-			}
-			?>
-		</div>
+		<?php get_template_part('header-navigation'); ?>
+		

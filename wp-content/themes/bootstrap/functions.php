@@ -366,18 +366,9 @@ function smm_posted_in() {
 endif;
 
 function bootstrap_menu() { ?>
- <li><a href="<?php bloginfo('url'); ?>">Home</a></li>
  <?php wp_list_pages('title_li&show_home=1'); ?>
 <?php }
 add_filter( 'wp_page_menu', 'bootstrap_menu' );
-
-// Filter wp_nav_menu() to add additional links and other output
-function bootstrap_nav_menu_items($items) {
-    $homelink = '<li class="home"><a href="' . home_url( '/' ) . '">' . __('Home') . '</a></li>';
-    $items = $homelink . $items;
-    return $items;
-}
-add_filter( 'wp_nav_menu_items', 'bootstrap_nav_menu_items' );
 
 // Add's classes to default wp_nav() output to utilize the Bootstraps menu
 class Bootstrap_Menu_Walker extends Walker_Nav_Menu{
