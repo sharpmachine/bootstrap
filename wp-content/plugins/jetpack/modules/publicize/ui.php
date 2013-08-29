@@ -71,7 +71,7 @@ class Publicize_UI {
 		add_thickbox();
 	}
 
-	function connected_notice( $service_name ) { ?>
+	public static function connected_notice( $service_name ) { ?>
 		<div class='updated'>
 			<p><?php printf( __( 'You have successfully connected your blog with your %s account.', 'jetpack' ), Publicize::get_service_label( $service_name ) ); ?></p>
 		</div><?php
@@ -190,7 +190,7 @@ class Publicize_UI {
 
 	}
 
-	function global_checkbox( $service_name, $id ) {
+	public static function global_checkbox( $service_name, $id ) {
 		global $publicize;
 		if ( current_user_can( $publicize->GLOBAL_CAP ) ) : ?>
 			<p>
@@ -208,7 +208,7 @@ class Publicize_UI {
 		</div><?php
 	}
 
-	function options_page_other( $service_name ) {
+	public static function options_page_other( $service_name ) {
 		// Nonce check
 		check_admin_referer( "options_page_{$service_name}_" . $_REQUEST['connection'] );
 		?>
@@ -376,7 +376,7 @@ jQuery( function($) {
 	function post_page_metabox() {
 		global $post;
 
-		if ( 'post' != $post->post_type )
+		if ( ! $this->publicize->post_type_is_publicizeable( $post->post_type ) )
 			return;
 
 		$user_id = empty( $post->post_author ) ? $GLOBALS['user_ID'] : $post->post_author;
@@ -418,7 +418,7 @@ jQuery( function($) {
 								$connection_data = $connection->get_meta( 'connection_data' );
 							elseif ( ! empty( $connection['connection_data'] ) )
 								$connection_data = $connection['connection_data'];
-							
+
 							if ( !$continue = apply_filters( 'wpas_submit_post?', true, $post->ID, $name, $connection_data ) )
 								continue;
 

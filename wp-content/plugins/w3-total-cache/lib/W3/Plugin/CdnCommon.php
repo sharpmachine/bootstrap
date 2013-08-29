@@ -277,7 +277,11 @@ class W3_Plugin_CdnCommon extends W3_Plugin {
          */
         $home_url_ssl =  w3_get_home_url_ssl();
         if (substr($url, 0, strlen($home_url_ssl)) == $home_url_ssl) {
-            $file_name = w3_get_document_root() . substr($url, strlen($home_url_ssl));
+            if (!w3_is_multisite())
+                $home_url_ssl = str_replace(trim(w3_get_home_path(),'/'), '', $home_url_ssl);
+            $path = str_replace($home_url_ssl, '', $url);
+            $file_name = w3_get_document_root() . '/' . trim($path, '/');
+
         } else {
             // unknown url for uploading
             return;
@@ -351,7 +355,8 @@ class W3_Plugin_CdnCommon extends W3_Plugin {
                         'pasv' => $this->_config->get_boolean('cdn.ftp.pasv'),
                         'domain' => $this->_config->get_array('cdn.ftp.domain'),
                         'ssl' => $this->_config->get_string('cdn.ftp.ssl'),
-                        'compression' => false
+                        'compression' => false,
+                        'docroot' => w3_get_document_root()
                     );
                     break;
 
@@ -420,11 +425,20 @@ class W3_Plugin_CdnCommon extends W3_Plugin {
                     );
                     break;
 
+                case 'maxcdn':
+                    $engine_config = array(
+                        'authorization_key' => $this->_config->get_string('cdn.maxcdn.authorization_key'),
+                        'zone_id' => $this->_config->get_integer('cdn.maxcdn.zone_id'),
+                        'domain' => $this->_config->get_array('cdn.maxcdn.domain'),
+                        'ssl' => $this->_config->get_string('cdn.maxcdn.ssl'),
+                        'compression' => false
+                    );
+                    break;
+
                 case 'netdna':
                     $engine_config = array(
-                        'alias' => $this->_config->get_string('cdn.netdna.alias'),
-                        'consumerkey' => $this->_config->get_string('cdn.netdna.consumerkey'),
-                        'consumersecret' => $this->_config->get_string('cdn.netdna.consumersecret'),
+                        'authorization_key' => $this->_config->get_string('cdn.netdna.authorization_key'),
+                        'zone_id' => $this->_config->get_integer('cdn.netdna.zone_id'),
                         'domain' => $this->_config->get_array('cdn.netdna.domain'),
                         'ssl' => $this->_config->get_string('cdn.netdna.ssl'),
                         'compression' => false
@@ -502,6 +516,7 @@ class W3_Plugin_CdnCommon extends W3_Plugin {
      * @return string
      */
     function docroot_filename_to_uri($file) {
+        $file = ltrim($file, '/');
         // Translate multisite subsite uploads paths
         $file = str_replace(basename(WP_CONTENT_DIR) . '/blogs.dir/' . w3_get_blog_id() . '/', '', $file);
         if (strpos($file, basename(WP_CONTENT_DIR)) === 0 && !w3_is_multisite())
@@ -541,13 +556,13 @@ class W3_Plugin_CdnCommon extends W3_Plugin {
         if (w3_is_cdn_mirror($engine)) {
             if (w3_is_network() && strpos($local_uri_path, 'files') === 0) {
                 $upload_dir = wp_upload_dir();
-                return trim($this->abspath_to_relative_path(dirname($upload_dir['basedir'])) . '/' . $local_uri_path, '/');
+                return ltrim($this->abspath_to_relative_path(dirname($upload_dir['basedir'])) . '/' . $local_uri_path, '/');
             }
         }
 
         $remote_path = $local_uri_path;
 
-        return trim($remote_path, "/");
+        return ltrim($remote_path, "/");
     }
 
     /**

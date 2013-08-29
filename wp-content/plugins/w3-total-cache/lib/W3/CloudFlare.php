@@ -58,7 +58,7 @@ class W3_CloudFlare {
      *
      * @param string $action
      * @param string $value
-     * @return array
+     * @return object
      */
     function api_request($action, $value = null) {
         w3_require_once(W3TC_INC_DIR . '/functions/http.php');
@@ -109,10 +109,10 @@ class W3_CloudFlare {
 
         if (empty($this->_cf_config['key']) || !is_string($this->_cf_config['key']))
             return false;
-			
-		if ($this->get_last_error())
-			return false;
-			
+
+        if ($this->get_last_error())
+            return false;
+
         $url = sprintf('%s?u=%s&tkn=%s&evnt_t=%s&evnt_v=%s', W3TC_CLOUDFLARE_EXTERNAL_EVENT_URL, urlencode($this->_cf_config['email']), urlencode($this->_cf_config['key']), urlencode($type), urlencode($value));
         $response = w3_http_get($url);
 
@@ -170,6 +170,7 @@ class W3_CloudFlare {
      * @throws FileOperationException
      */
     public function update_ip_ranges() {
+        w3_require_once(W3TC_INC_DIR . '/functions/http.php');
         $ip4_diff = $ip6_diff = false;
         $config_master = new W3_Config(true);
         $response =w3_http_get(W3TC_CLOUDFLARE_IP4_URL);

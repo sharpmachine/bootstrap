@@ -75,10 +75,7 @@ class W3_Plugin_Minify extends W3_Plugin {
          * Start minify
          */
         if ($this->can_minify()) {
-            ob_start(array(
-                &$this,
-                'ob_callback'
-            ));
+            w3tc_add_ob_callback('minify', array($this,'ob_callback'));
         }
 
         if (!is_admin()) {
@@ -89,34 +86,6 @@ class W3_Plugin_Minify extends W3_Plugin {
                     'send_headers'
                 ));
         }
-
-        if (is_admin()) {
-            $admin = $this->get_admin();
-            $admin->add_index_files_if_required();
-        }
-    }
-
-    /**
-     * Instantiates worker with admin functionality on demand
-     *
-     * @return W3_Plugin_MinifyAdmin
-     */
-    function get_admin() {
-        return w3_instance('W3_Plugin_MinifyAdmin');
-    }
-
-    /**
-     * Activate plugin action (called by W3_Plugins)
-     */
-    function activate() {
-        $this->get_admin()->activate();
-    }
-
-    /**
-     * Deactivate plugin action (called by W3_Plugins)
-     */
-    function deactivate() {
-        $this->get_admin()->deactivate();
     }
 
      /**
@@ -125,7 +94,8 @@ class W3_Plugin_Minify extends W3_Plugin {
      * @return void
      */
     function cleanup() {
-        $this->get_admin()->cleanup();
+        $a = w3_instance('W3_Plugin_MinifyAdmin');
+        $a->cleanup();
     }
 
     /**
@@ -193,6 +163,7 @@ class W3_Plugin_Minify extends W3_Plugin {
                                     continue;
                                 }
                                 $handled_scripts[] = $file;
+                                $this->replaced_scripts[] = $file;
                                 if (in_array($file, $ignore_js_files)) {
                                     if ($tag_pos > $embed_pos) {
                                         if ($files_to_minify) {
@@ -247,6 +218,7 @@ class W3_Plugin_Minify extends W3_Plugin {
                                     continue;
                                 }
                                 $handled_styles[] = $file;
+                                $this->replaced_styles[] = $file;
                                 if (in_array($file, $ignore_css_files)) {
                                     if ($tag_pos > $embed_pos) {
                                         if ($files_to_minify) {
@@ -489,6 +461,9 @@ class W3_Plugin_Minify extends W3_Plugin {
                 $regexps[] = w3_preg_quote($file);
             } else {
                 // local CSS files
+                $file = ltrim($file, '/');
+                if (ltrim(w3_get_site_path(),'/') && strpos($file, ltrim(w3_get_site_path(),'/')) === 0)
+                    $file = str_replace(ltrim(w3_get_site_path(),'/'), '', $file);
                 $file = ltrim(preg_replace('~' . $home_url_regexp . '~i', '', $file), '/\\');
                 $regexps[] = '(' . $home_url_regexp . ')?/?' . w3_preg_quote($file);
             }
@@ -528,6 +503,9 @@ class W3_Plugin_Minify extends W3_Plugin {
                 $regexps[] = w3_preg_quote($file);
             } else {
                 // local JS files
+                $file = ltrim($file, '/');
+                if (ltrim(w3_get_site_path(),'/') && strpos($file, ltrim(w3_get_site_path(),'/')) === 0)
+                    $file = str_replace(ltrim(w3_get_site_path(),'/'), '', $file);
                 $file = ltrim(preg_replace('~' . $home_url_regexp . '~i', '', $file), '/\\');
                 $regexps[] = '(' . $home_url_regexp . ')?/?' . w3_preg_quote($file);
             }
@@ -893,6 +871,9 @@ class W3_Plugin_Minify extends W3_Plugin {
      * @return string
      */
     function format_url_group($theme, $template, $location, $type, $rewrite = null) {
+        /**
+         * @var W3_Minify $w3_minify
+         */
         $w3_minify = w3_instance('W3_Minify');
 
         $url = false;
@@ -1198,6 +1179,10 @@ class W3_Plugin_Minify extends W3_Plugin {
                 return false;
             }
         }
+
+        w3_require_once(W3TC_LIB_W3_DIR . '/Request.php');
+        if (W3_Request::get_string('wp_customize'))
+            return false;
 
         return true;
     }

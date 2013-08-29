@@ -111,13 +111,12 @@ class W3_Cache_File extends W3_Cache_Base {
      * @param string $group Used to differentiate between groups of cache values
      * @return boolean
      */
-    function set($key, &$var, $expire = 0, $group = '') {
+    function set($key, $var, $expire = 0, $group = '') {
         $key = $this->get_item_key($key);
 
         $sub_path = $this->_get_path($key);
         $path = $this->_cache_dir . DIRECTORY_SEPARATOR . ($group ? $group . DIRECTORY_SEPARATOR : '') . $sub_path;
 
-        $sub_dir = dirname($sub_path);
         $dir = dirname($path);
 
         if (!@is_dir($dir)) {
@@ -155,16 +154,18 @@ class W3_Cache_File extends W3_Cache_Base {
      * @param string $group Used to differentiate between groups of cache values
      * @return mixed
      */
-    function get($key, $group = '') {
+    function get_with_old($key, $group = '') {
+        $has_old_data = false;
+
         $key = $this->get_item_key($key);
 
         $path = $this->_cache_dir . DIRECTORY_SEPARATOR . ($group ? $group . DIRECTORY_SEPARATOR : '') . $this->_get_path($key);
         if (!is_readable($path))
-            return null;
+            return array(null, $has_old_data);
 
         $fp = @fopen($path, 'rb');
         if (!$fp)
-            return null;
+            return array(null, $has_old_data);
 
         if ($this->_locking)
             @flock($fp, LOCK_SH);
@@ -184,6 +185,7 @@ class W3_Cache_File extends W3_Cache_Base {
                         @fputs($fp2, pack('L', time() + 30));
                         @fclose($fp2);
                     }
+                    $has_old_data = true;
                 }
             } else {
                 $data = '';
@@ -194,6 +196,7 @@ class W3_Cache_File extends W3_Cache_Base {
                 $data = substr($data, 14);
                 $data_unserialized = @unserialize($data);
             }
+
         }
 
         if ($this->_locking)
@@ -201,7 +204,7 @@ class W3_Cache_File extends W3_Cache_Base {
 
         @fclose($fp);
 
-        return $data_unserialized;
+        return array($data_unserialized, $has_old_data);
     }
 
     /**
@@ -257,6 +260,19 @@ class W3_Cache_File extends W3_Cache_Base {
     }
 
     /**
+     * Key to delete, deletes .old and primary if exists.
+     * @param $key
+     * @param $group
+     *
+     * @return bool
+     */
+    function hard_delete($key) {
+        $key = $this->get_item_key($key);
+        $path = $this->_cache_dir . DIRECTORY_SEPARATOR . $this->_get_path($key);
+        return @unlink($path);
+    }
+
+    /**
      * Flushes all data
      *
      * @param string $group Used to differentiate between groups of cache values
@@ -265,7 +281,8 @@ class W3_Cache_File extends W3_Cache_Base {
     function flush($group = '') {
         @set_time_limit($this->_flush_timelimit);
         $flush_dir = $group ? $this->_cache_dir . DIRECTORY_SEPARATOR . $group . DIRECTORY_SEPARATOR : $this->_flush_dir;
-        return w3_emptydir($flush_dir, $this->_exclude);
+		w3_emptydir($flush_dir, $this->_exclude);
+        return true;
     }
 
     /**
@@ -297,8 +314,7 @@ class W3_Cache_File extends W3_Cache_Base {
         else
             $hash = md5($key);
 
-        $hash = md5($key);
-        $path = sprintf('%s/%s/%s/%s.php', substr($hash, 0, 3), substr($hash, 3, 3), substr($hash, 6, 3), $hash);
+        $path = sprintf('%s/%s/%s.php', substr($hash, 0, 3), substr($hash, 3, 3), $hash);
 
         return $path;
     }

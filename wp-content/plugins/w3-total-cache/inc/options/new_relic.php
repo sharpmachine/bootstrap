@@ -38,7 +38,7 @@
                     <label for="app-apdex-t">Application ApDex Threshold:</label>
                 </th>
                 <td>
-                    <input id="app-apdex-t" name="application[app_apdex_t]" type="text" value="<?php esc_attr_e($application_settings['app-apdex-t'])?>" <?php $this->sealing_disabled('newrelic') ?>/>
+                    <input id="app-apdex-t" name="application[app_apdex_t]" type="text" value="<?php echo esc_attr($application_settings['app-apdex-t'])?>" <?php $this->sealing_disabled('newrelic') ?>/>
                 </td>
             </tr>
             <tr>
@@ -46,7 +46,7 @@
                     <label for="rum-apdex-t"><acronym title="Real User Monitoring">RUM</acronym> ApDex Threshold:</label>
                 </th>
                 <td>
-                    <input id="rum-apdex-t" name="application[rum_apdex_t]" type="text" value="<?php esc_attr_e($application_settings['rum-apdex-t'])?>" <?php $this->sealing_disabled('newrelic') ?>/>
+                    <input id="rum-apdex-t" name="application[rum_apdex_t]" type="text" value="<?php echo esc_attr($application_settings['rum-apdex-t'])?>" <?php $this->sealing_disabled('newrelic') ?>/>
                 </td>
             </tr>
             <tr>
@@ -76,7 +76,7 @@
         <table class="form-table">
             <tr>
                 <th><label for="newrelic_cache_time"><?php _e('Cache time:', 'w3-total-cache')?></label></th>
-                <td><input id="newrelic_cache_time" name="newrelic.cache_time" type="text" value="<?php esc_attr_e($this->_config->get_integer('newrelic.cache_time', 5))?>" />
+                <td><input id="newrelic_cache_time" name="newrelic.cache_time" type="text" value="<?php echo esc_attr($this->_config->get_integer('newrelic.cache_time', 5))?>" />
                     <p><span class="description">
                         <?php _e('How many minutes data retrieved from New Relic should be stored. Minimum is 1 minute.', 'w3-total-cache') ?>
                         </span>
@@ -107,10 +107,23 @@
                     </div>
                 </th>
             </tr>
+            <tr>
+                <th>
+                    <label for="newrelic_include_rum"><?php _e('Include <acronym title="Real User Monitoring">RUM</acronym> in compressed or cached pages', 'w3-total-cache')?></label>
+                </th>
+                <td>
+                    <input name="newrelic.include_rum" type="hidden" value="0" />
+                    <input id="newrelic_include_rum" name="newrelic.include_rum" type="checkbox" value="1" <?php checked($this->_config->get_boolean('newrelic.include_rum')) ?> />
+                    <p><span class="description">
+                    <?php _e('This enables inclusion of <acronym title="Real User Monitoring">RUM</acronym> when using Page Cache together with Browser Cache gzip or when using Page Cache with Disc: Enhanced', 'w3-total-cache')?>
+                    </span>
+                    </p>
+                </td>
+            </tr>
             <?php if(w3_is_network() && w3_get_blog_id() == 0): ?>
             <tr>
                 <th><label for="newrelic_appname_prefix"><?php _e('Prefix network sites:', 'w3-total-cache') ?></label></th>
-                <td><input id="newrelic_appname_prefix" name="newrelic.appname_prefix" type="text" value="<?php echo $this->_config->get_string('newrelic.appname_prefix')?>" /></td>
+                <td><input id="newrelic_appname_prefix" name="newrelic.appname_prefix" type="text" value="<?php echo esc_attr($this->_config->get_string('newrelic.appname_prefix')) ?>" /></td>
             </tr>
             <tr>
                 <th><label for="newrelic_merge_with_network"><?php _e('Include network sites stats in network:', 'w3-total-cache') ?></label></th>
@@ -135,7 +148,7 @@
                     <input name="newrelic.use_php_function" type="hidden" value="0" />
                     <input id="newrelic_use_php_function" name="newrelic.use_php_function" type="checkbox" value="1" <?php checked($this->_config->get_boolean('newrelic.use_php_function')) ?>/>
                         <p><span class="description">
-                           <?php _e('If you use php-fpm or nginx enable this to set proper application name.', 'w3-total-cache') ?></span>
+                           <?php _e('Enable this to dynamically set proper application name. (See New Relic <a href="https://newrelic.com/docs/php/per-directory-settings">Per-directory settings</a> for other methods.', 'w3-total-cache') ?></span>
                         </p>
                     <?php endif ?>
                 </td>

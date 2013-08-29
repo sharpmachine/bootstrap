@@ -32,34 +32,8 @@ class W3_Plugin_BrowserCache extends W3_Plugin {
         }
 
         if ($this->can_ob()) {
-            ob_start(array(
-                &$this,
-                'ob_callback'
-            ));
+            w3tc_add_ob_callback('browsercache', array($this,'ob_callback'));
         }
-    }
-
-    /**
-     * Instantiates worker with admin functionality on demand
-     *
-     * @return W3_Plugin_BrowserCacheAdmin
-     */
-    function get_admin() {
-        return w3_instance('W3_Plugin_BrowserCacheAdmin');
-    }
-
-    /**
-     * Activate plugin action (called by W3_Plugins)
-     */
-    function activate() {
-        $this->get_admin()->activate();
-    }
-
-    /**
-     * Deactivate plugin action (called by W3_Plugins)
-     */
-    function deactivate() {
-        return $this->get_admin()->deactivate();
     }
 
     /**
@@ -153,7 +127,7 @@ class W3_Plugin_BrowserCache extends W3_Plugin {
      * @return string
      */
     function link_replace_callback($matches) {
-        static $id = null, $extensions = null;
+        static $id = null, $extensions = null, $exceptions = null;
 
         if ($id === null) {
             $id = $this->get_replace_id();
@@ -163,10 +137,17 @@ class W3_Plugin_BrowserCache extends W3_Plugin {
             $extensions = $this->get_replace_extensions();
         }
 
+        if ($exceptions === null) {
+            $exceptions = $this->_config->get_array('browsercache.replace.exceptions');
+        }
+
         list ($match, $attr, $url, , , , , $extension) = $matches;
 
         if (in_array($extension, $extensions)) {
             $url = w3_remove_query($url);
+            foreach($exceptions as  $exception)
+                if(preg_match('/' . $exception . '/',$url))
+                    return $match;
             $url .= (strstr($url, '?') !== false ? '&amp;' : '?') . $id;
 
             if ($attr != 'w3tc_load_js(')
@@ -303,13 +284,11 @@ class W3_Plugin_BrowserCache extends W3_Plugin {
     function get_cache_config() {
         $config = array();
 
-        $cssjs_types = $this->_get_cssjs_types();
-        $html_types = $this->_get_html_types();
-        $other_types = $this->_get_other_types();
+        $e = w3_instance('W3_BrowserCacheAdminEnvironment');
+        $mime_types = $e->get_mime_types();
 
-        $this->_get_cache_config($config, $cssjs_types, 'cssjs');
-        $this->_get_cache_config($config, $html_types, 'html');
-        $this->_get_cache_config($config, $other_types, 'other');
+        foreach ($mime_types as $type => $extensions)
+            $this->_get_cache_config($config, $extensions, $type);
 
         return $config;
     }
@@ -318,7 +297,7 @@ class W3_Plugin_BrowserCache extends W3_Plugin {
      * Writes cache config
      *
      * @param string $config
-     * @param string $mime_types
+     * @param array $mime_types
      * @param array $section
      * @return void
      */

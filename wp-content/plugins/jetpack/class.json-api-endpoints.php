@@ -161,7 +161,6 @@ abstract class WPCOM_JSON_API_Endpoint {
 	// Get POST body data
 	function input( $return_default_values = true, $cast_and_filter = true ) {
 		$input = trim( $this->api->post_body );
-
 		switch ( $this->api->content_type ) {
 		case 'application/json; charset=utf-8' :
 		case 'application/json' :
@@ -170,7 +169,8 @@ abstract class WPCOM_JSON_API_Endpoint {
 		case 'text/x-javascript' :
 		case 'text/x-json' :
 		case 'text/json' :
-			$return = json_decode( $input );
+			$return = json_decode( $input, true );
+
 			if ( function_exists( 'json_last_error' ) ) {
 				if ( JSON_ERROR_NONE !== json_last_error() ) {
 					return null;
@@ -181,9 +181,6 @@ abstract class WPCOM_JSON_API_Endpoint {
 				}
 			}
 
-			if ( is_object( $return ) ) {
-				$return = (array) $return;
-			}
 			break;
 		case 'multipart/form-data' :
 			$return = array_merge( stripslashes_deep( $_POST ), $_FILES );
@@ -203,6 +200,7 @@ abstract class WPCOM_JSON_API_Endpoint {
 	function cast_and_filter( $data, $documentation, $return_default_values = false, $for_output = false ) {
 		$return_as_object = false;
 		if ( is_object( $data ) ) {
+			// @todo this should probably be a deep copy if $data can ever have nested objects
 			$data = (array) $data;
 			$return_as_object = true;
 		} elseif ( !is_array( $data ) ) {
@@ -575,25 +573,22 @@ abstract class WPCOM_JSON_API_Endpoint {
 
 			// Examples for endpoint documentation response
 			$response_key = 'dev_response_' . $this->version . '_' . $this->method . '_' . sanitize_title( $this->path );
-			$response     = get_option( $response_key );
+			$response     = wp_cache_get( $response_key );
 
 			// Response doesn't exist, so run the request
-			if ( empty( $response ) ) {
+			if ( false === $response ) {
 
 				// Only trust GET request
 				if ( 'GET' === $this->method ) {
-					$response = wp_remote_get( $this->example_request );
-				}
+					$response      = wp_remote_get( $this->example_request );
+					$response_body = wp_remote_retrieve_body( $response );
 
-				// Set as false if it's an error
-				if ( is_wp_error( $response ) ) {
-					$response = false;
-				}
-
-				// Only update the option if there's a result
-				if ( !empty( $response ) ) {
-					$response = $response['body'];
-					update_option( $response_key, $response );
+					// Only cache if there's a result
+					if ( strlen( $response_body ) ) {
+						wp_cache_set( $response_key, $response );
+					} else {
+						wp_cache_delete( $response_key );
+					}
 				}
 			}
 
@@ -887,6 +882,9 @@ EOPHP;
 			$profile_URL = 'http://en.gravatar.com/' . md5( strtolower( trim( $email ) ) );
 		} else {
 			if ( isset( $author->post_author ) ) {
+				if ( 0 == $author->post_author )
+					return null;
+
 				$author = $author->post_author;
 			} elseif ( isset( $author->user_id ) && $author->user_id ) {
 				$author = $author->user_id;
@@ -1150,7 +1148,7 @@ abstract class WPCOM_JSON_API_Post_Endpoint extends WPCOM_JSON_API_Endpoint {
 		if ( empty( $key ) )
 			return false;
 
-		// whitelist of post types that can be accessed
+		// whitelist of metadata that can be accessed
  		if ( in_array( $key, apply_filters( 'rest_api_allowed_public_metadata', array() ) ) )
 			return true;
 
@@ -1439,7 +1437,7 @@ abstract class WPCOM_JSON_API_Post_Endpoint extends WPCOM_JSON_API_Endpoint {
 					$metadata[] = array(
 						'id'    => $meta['meta_id'],
 						'key'   => $meta['meta_key'],
-						'value' => $meta['meta_value']
+						'value' => maybe_unserialize( $meta['meta_value'] ),
 					);
 				}
 
@@ -2007,39 +2005,38 @@ class WPCOM_JSON_API_Update_Post_Endpoint extends WPCOM_JSON_API_Post_Endpoint {
 		if ( ! empty( $metadata ) ) {
 			foreach ( (array) $metadata as $meta ) {
 
+				$meta = (object) $meta;
+
 				$existing_meta_item = new stdClass;
 
 				if ( empty( $meta->operation ) )
 					$meta->operation = 'update';
-
-				if ( ! empty( $meta->key ) )
-					$meta->key = wp_unslash( $meta->key );
 
 				if ( ! empty( $meta->value ) ) {
 					if ( 'true' == $meta->value )
 						$meta->value = true;
 					if ( 'false' == $meta->value )
 						$meta->value = false;
-
-					$meta->value = wp_unslash( $meta->value );
 				}
-
-				if ( ! empty( $meta->previous_value ) )
-					$meta->previous_value = wp_unslash( $meta->previous_value );
 
 				if ( ! empty( $meta->id ) ) {
 					$meta->id = absint( $meta->id );
 					$existing_meta_item = get_metadata_by_mid( 'post', $meta->id );
 				}
 
+				$unslashed_meta_key = wp_unslash( $meta->key ); // should match what the final key will be
+				$meta->key = wp_slash( $meta->key );
+				$unslashed_existing_meta_key = wp_unslash( $existing_meta_item->meta_key );
+				$existing_meta_item->meta_key = wp_slash( $existing_meta_item->meta_key );
+
 				switch ( $meta->operation ) {
 					case 'delete':
 
-						if ( ! empty( $meta->id ) && ! empty( $existing_meta_item->meta_key ) && current_user_can( 'delete_post_meta', $post_id, $existing_meta_item->meta_key ) ) {
+						if ( ! empty( $meta->id ) && ! empty( $existing_meta_item->meta_key ) && current_user_can( 'delete_post_meta', $post_id, $unslashed_existing_meta_key ) ) {
 							delete_metadata_by_mid( 'post', $meta->id );
-						} elseif ( ! empty( $meta->key ) && ! empty( $meta->previous_value ) && current_user_can( 'delete_post_meta', $post_id, $meta->key ) ) {
+						} elseif ( ! empty( $meta->key ) && ! empty( $meta->previous_value ) && current_user_can( 'delete_post_meta', $post_id, $unslashed_meta_key ) ) {
 							delete_post_meta( $post_id, $meta->key, $meta->previous_value );
-						} elseif ( ! empty( $meta->key ) && current_user_can( 'delete_post_meta', $post_id, $meta->key ) ) {
+						} elseif ( ! empty( $meta->key ) && current_user_can( 'delete_post_meta', $post_id, $unslashed_meta_key ) ) {
 							delete_post_meta( $post_id, $meta->key );
 						}
 
@@ -2048,7 +2045,7 @@ class WPCOM_JSON_API_Update_Post_Endpoint extends WPCOM_JSON_API_Post_Endpoint {
 
 						if ( ! empty( $meta->id ) || ! empty( $meta->previous_value ) ) {
 							continue;
-						} elseif ( ! empty( $meta->key ) && ! empty( $meta->meta ) && current_user_can( 'add_post_meta', $post_id, $meta->key ) ) {
+						} elseif ( ! empty( $meta->key ) && ! empty( $meta->value ) && current_user_can( 'add_post_meta', $post_id, $unslashed_meta_key ) ) {
 							add_post_meta( $post_id, $meta->key, $meta->value );
 						}
 
@@ -2057,11 +2054,11 @@ class WPCOM_JSON_API_Update_Post_Endpoint extends WPCOM_JSON_API_Post_Endpoint {
 
 						if ( empty( $meta->value ) ) {
 							continue;
-						} elseif ( ! empty( $meta->id ) && ! empty( $existing_meta_item->meta_key ) && current_user_can( 'edit_post_meta', $post_id, $existing_meta_item->meta_key ) ) {
+						} elseif ( ! empty( $meta->id ) && ! empty( $existing_meta_item->meta_key ) && current_user_can( 'edit_post_meta', $post_id, $unslashed_existing_meta_key ) ) {
 							update_metadata_by_mid( 'post', $meta->id, $meta->value );
-						} elseif ( ! empty( $meta->key ) && ! empty( $meta->previous_value ) && current_user_can( 'edit_post_meta', $post_id, $meta->key ) ) {
+						} elseif ( ! empty( $meta->key ) && ! empty( $meta->previous_value ) && current_user_can( 'edit_post_meta', $post_id, $unslashed_meta_key ) ) {
 							update_post_meta( $post_id, $meta->key,$meta->value, $meta->previous_value );
-						} elseif ( ! empty( $meta->key ) && current_user_can( 'edit_post_meta', $post_id, $meta->key ) ) {
+						} elseif ( ! empty( $meta->key ) && current_user_can( 'edit_post_meta', $post_id, $unslashed_meta_key ) ) {
 							update_post_meta( $post_id, $meta->key, $meta->value );
 						}
 
@@ -2070,6 +2067,8 @@ class WPCOM_JSON_API_Update_Post_Endpoint extends WPCOM_JSON_API_Post_Endpoint {
 
 			}
 		}
+
+		do_action( 'rest_api_inserted_post', $post_id, $insert, $new );
 
 		$return = $this->get_post_by( 'ID', $post_id, $args['context'] );
 		if ( !$return || is_wp_error( $return ) ) {
@@ -2738,7 +2737,10 @@ class WPCOM_JSON_API_Update_Comment_Endpoint extends WPCOM_JSON_API_Comment_Endp
 	// /sites/%s/comments/%d             -> $blog_id, $comment_id
 	// /sites/%s/comments/%d/delete      -> $blog_id, $comment_id
 	function callback( $path = '', $blog_id = 0, $object_id = 0 ) {
-		$blog_id = $this->api->switch_to_blog_and_validate_user( $this->api->get_blog_id( $blog_id ) );
+		if ( $this->api->ends_with( $path, '/new' ) )
+			$blog_id = $this->api->switch_to_blog_and_validate_user( $this->api->get_blog_id( $blog_id ), false );
+		else
+			$blog_id = $this->api->switch_to_blog_and_validate_user( $this->api->get_blog_id( $blog_id ) );
 		if ( is_wp_error( $blog_id ) ) {
 			return $blog_id;
 		}
@@ -2876,6 +2878,10 @@ class WPCOM_JSON_API_Update_Comment_Endpoint extends WPCOM_JSON_API_Comment_Endp
 		}
 
 		if ( isset( $update['comment_status'] ) ) {
+			if ( count( $update ) === 1 ) {
+				// We are only here to update the comment status so let's respond ASAP
+				add_action( 'wp_set_comment_status', array( $this, 'output_comment' ), 0, 1 );
+			}
 			switch ( $update['comment_status'] ) {
 				case 'approved' :
 					if ( 'approve' !== $comment_status ) {
@@ -2960,6 +2966,12 @@ class WPCOM_JSON_API_Update_Comment_Endpoint extends WPCOM_JSON_API_Comment_Endp
 
 		return $this->get_comment( $comment->comment_ID, $args['context'] );
 	}
+
+	function output_comment( $comment_id ) {
+		$args  = $this->query_args();
+		$output = $this->get_comment( $comment_id, $args['context'] );
+		$this->api->output_early( 200, $output );
+	}
 }
 
 class WPCOM_JSON_API_GET_Site_Endpoint extends WPCOM_JSON_API_Endpoint {
@@ -3028,9 +3040,13 @@ class WPCOM_JSON_API_GET_Site_Endpoint extends WPCOM_JSON_API_Endpoint {
 	}
 }
 
+
+
 /*
  * Set up endpoints
  */
+
+
 
 /*
  * Site endpoints
@@ -3111,7 +3127,7 @@ new WPCOM_JSON_API_List_Posts_Endpoint( array(
 		'author'   => "(int) Author's user ID",
 		'search'   => '(string) Search query',
 		'meta_key'   => '(string) Metadata key that the post should contain',
-		'meta_value'   => '(int|string) Metadata value that the post should contain. Will only be applied if a `meta_key` is also given',
+		'meta_value'   => '(string) Metadata value that the post should contain. Will only be applied if a `meta_key` is also given',
 	),
 
 	'example_request' => 'https://public-api.wordpress.com/rest/v1/sites/en.blog.wordpress.com/posts/?number=5&pretty=1'

@@ -43,7 +43,7 @@ class Jetpack_Subscriptions {
 	 * Singleton
 	 * @static
 	 */
-	function init() {
+	static function init() {
 		static $instance = false;
 
 		if ( !$instance ) {
@@ -659,7 +659,7 @@ class Jetpack_Subscriptions_Widget extends WP_Widget {
 		return $instance;
 	}
 
-	function defaults() {
+	public static function defaults() {
 		return array(
 			'title'               	 => esc_html__( 'Subscribe to Blog via Email', 'jetpack' ),
 			'subscribe_text'      	 => esc_html__( 'Enter your email address to subscribe to this blog and receive notifications of new posts by email.', 'jetpack' ),
@@ -707,7 +707,7 @@ class Jetpack_Subscriptions_Widget extends WP_Widget {
 <p>
 	<label for="<?php echo $this->get_field_id( 'show_subscribers_total' ); ?>">
 		<input type="checkbox" id="<?php echo $this->get_field_id( 'show_subscribers_total' ); ?>" name="<?php echo $this->get_field_name( 'show_subscribers_total' ); ?>" value="1"<?php echo $show_subscribers_total; ?> />
-		<?php echo esc_html( sprintf( _n( 'Show total number of subscribers? (%s subscriber)', 'Show total number of subscribers? (%s subscribers)', $subscribers_total, 'jetpack' ), number_format_i18n( $subscribers_total ) ) ); ?>
+		<?php echo esc_html( sprintf( _n( 'Show total number of subscribers? (%s subscriber)', 'Show total number of subscribers? (%s subscribers)', $subscribers_total, 'jetpack' ), $subscribers_total ) ); ?>
 	</label>
 </p>
 <?php
