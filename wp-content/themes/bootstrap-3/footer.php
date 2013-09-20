@@ -1,13 +1,13 @@
 
-	<footer id="footer" role="contentinfo">
-		<div class="container">
-			<div id="site-info">
-				&copy;<?php echo date ('Y'); ?><a href="<?php echo home_url( '/' ); ?>" title="<?php echo esc_attr( get_bloginfo( 'name', 'display' ) ); ?>" rel="home">
-				<?php bloginfo( 'name' ); ?></a>
-				 | <a href="http://getbootstrap.com/" target="_blank">Bootstrap Docs</a><!-- Remove for production -->
-			</div><!-- #site-info -->
-		</div>
-	</footer>
+<footer id="footer" role="contentinfo">
+	<div class="container">
+		<div id="site-info">
+			&copy;<?php echo date ('Y'); ?><a href="<?php echo home_url( '/' ); ?>" title="<?php echo esc_attr( get_bloginfo( 'name', 'display' ) ); ?>" rel="home">
+			<?php bloginfo( 'name' ); ?></a>
+			| <a href="http://getbootstrap.com/" target="_blank">Bootstrap Docs</a><!-- Remove for production -->
+		</div><!-- #site-info -->
+	</div>
+</footer>
 
     <!-- Le javascript
     ================================================== -->
@@ -23,15 +23,19 @@
     <script src="<?php bloginfo('template_directory'); ?>/js/button.js"></script>
     <script src="<?php bloginfo('template_directory'); ?>/js/collapse.js"></script>
     <script src="<?php bloginfo('template_directory'); ?>/js/carousel.js"></script>
-    <script src="<?php bloginfo('template_directory'); ?>/js/typeahead.js"></script>
 
-	<!-- scripts concatenated and minified via ant build script-->
-	<script src="<?php bloginfo ('template_directory'); ?>/js/plugins.js"></script>
-	<script src="<?php bloginfo ('template_directory'); ?>/js/script.js"></script>
+    <!-- scripts concatenated and minified via ant build script-->
+    <script src="<?php bloginfo ('template_directory'); ?>/js/plugins.js"></script>
+    <script src="<?php bloginfo ('template_directory'); ?>/js/script.js"></script>
 
-	<!-- Remove these before deploying to production -->
-	<script src="<?php bloginfo ('template_directory'); ?>/js/hashgrid.js" type="text/javascript"></script>
+    <!-- Remove these before deploying to production -->
+    <script src="<?php bloginfo ('template_directory'); ?>/js/hashgrid.js" type="text/javascript"></script>
 
-<?php wp_footer(); ?>
-	</body>
-</html>
+    <script type="text/javascript">
+    	var grid = new hashgrid({ numberOfGrids: 1 });
+    </script>
+
+
+    <?php wp_footer(); ?>
+  </body>
+  </html>

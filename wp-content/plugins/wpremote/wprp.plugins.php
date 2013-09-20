@@ -116,7 +116,10 @@ function _wprp_update_plugin( $plugin ) {
 
 		// we do a remote request to activate, as we don't want to kill any installs
 		$data = array( 'actions' => array( 'activate_plugin' ), 'plugin' => $plugin, 'timestamp' => (string) time() );
-		$data['wpr_verify_key'] = WPR_API_Request::generate_hash( $data );
+
+		list( $hash ) = WPR_API_Request::generate_hashes( $data );
+
+		$data['wpr_verify_key'] = $hash;
 
 		$args = array( 'body' => $data );
 
@@ -316,6 +319,9 @@ function _wpr_get_gravity_form_plugin_data() {
 function _wpr_get_backupbuddy_plugin_data() {
 
 	if ( !class_exists('pb_backupbuddy') )
+		return false;
+
+	if ( ! file_exists( pb_backupbuddy::plugin_path() . '/pluginbuddy/lib/updater/updater.php' ) )
 		return false;
 
 	require_once( pb_backupbuddy::plugin_path() . '/pluginbuddy/lib/updater/updater.php' );

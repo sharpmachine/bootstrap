@@ -1,17 +1,20 @@
 /**
- * hashgrid (jQuery version)
+ * hashgrid (jQuery version, adapters are on the way)
  * http://github.com/dotjay/hashgrid
- * Version 6, 10 Jun 2011
- * Written by Jon Gibbins at Analog, http://analog.coop/
+ * Version 9, 30 May 2013
+ * Written by Jon Gibbins, http://dotjay.co.uk/
  *
  * Contibutors:
+ * James Aitken, http://loonypandora.co.uk/
+ * Tom Arnold, http://www.tomarnold.de/
  * Sean Coates, http://seancoates.com/
  * Phil Dokas, http://jetless.org/
  * Andrew Jaswa, http://andrewjaswa.com/
+ * Callum Macrae, http://lynx.io/
  */
 
 /**
- * @license Copyright 2011 Analog Coop Limited
+ * @license Copyright 2013 Analog Coop Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,19 +35,16 @@
  * // The basic #grid setup looks like this
  * var grid = new hashgrid();
  *
- * // Or you can set a custom id for your grid, e.g. #mygrid
- * var grid = new hashgrid("mygrid");
- *
  * // But there are a whole bunch of additional options you can set
  * var grid = new hashgrid({
- *     id: 'mygrid',            // id for the grid container
+ *     id: 'mygrid',            // set a custom id for the grid container
  *     modifierKey: 'alt',      // optional 'ctrl', 'alt' or 'shift'
  *     showGridKey: 's',        // key to show the grid
  *     holdGridKey: 'enter',    // key to hold the grid in place
  *     foregroundKey: 'f',      // key to toggle foreground/background
  *     jumpGridsKey: 'd',       // key to cycle through the grid classes
  *     numberOfGrids: 2,        // number of grid classes used
- *     classPrefix: 'class',    // prefix for the grid classes
+ *     classPrefix: 'myclass',  // prefix for the grid classes
  *     cookiePrefix: 'mygrid'   // prefix for the cookie name
  * });
  */
@@ -64,6 +64,7 @@ if (typeof jQuery == "undefined") {
  * @constructor
  */
 var hashgrid = function(set) {
+	var $ = jQuery;
 
 	var options = {
 			id: 'grid',             // id for the grid container
@@ -76,6 +77,7 @@ var hashgrid = function(set) {
 			classPrefix: 'grid-',   // prefix for the grid classes
 			cookiePrefix: 'hashgrid'// prefix for the cookie name
 		},
+		alreadyDown,
 		classNumber = 1,
 		gridLines,
 		gridWidth,
@@ -108,26 +110,26 @@ var hashgrid = function(set) {
 	}
 
 	// Remove any conflicting overlay
-	if (jQuery('#' + options.id).length > 0) {
-		jQuery('#' + options.id).remove();
+	if ($('#' + options.id).length > 0) {
+		$('#' + options.id).remove();
 	}
 
 	// Create overlay, hidden before adding to DOM
-	overlayEl = jQuery('<div></div>');
+	overlayEl = $('<div></div>');
 	overlayEl
 		.attr('id', options.id)
 		.css({
 			display: 'none',
-			'pointer-events': 'none'
+			pointerEvents: 'none'
 		});
-	jQuery("body").prepend(overlayEl);
-	overlay = jQuery('#' + options.id);
+	$("body").prepend(overlayEl);
+	overlay = $('#' + options.id);
 
 	// Unless a custom z-index is set, ensure the overlay will be behind everything
 	if (overlay.css('z-index') == 'auto') overlay.css('z-index', overlayZBackground);
 
 	// Override the default overlay height with the actual page height
-	pageHeight = parseFloat(jQuery(document).height());
+	pageHeight = parseFloat($(document).height());
 	overlay.height(pageHeight);
 
 	// Add the first grid line so that we can measure it
@@ -136,17 +138,17 @@ var hashgrid = function(set) {
 	// Position off-screen and display to calculate height
 	top = overlay.css("top");
 	overlay.css({
-		top: "-999px",
-		display: "block"
+		top: '-999px',
+		display: 'block'
 	});
 
 	// Calculate the number of grid lines needed
-	line = jQuery('#' + options.id + '-horiz');
+	line = $('#' + options.id + '-horiz');
 	lineHeight = line.outerHeight();
 
 	// Hide and reset top
 	overlay.css({
-		display: "none",
+		display: 'none',
 		top: top
 	});
 
@@ -165,7 +167,7 @@ var hashgrid = function(set) {
 	overlay.append(gridLines);
 
 	// vertical grid
-	overlay.append(jQuery('<div class="vert-container"></div>'));
+	overlay.append($('<div class="vert-container"></div>'));
 	overlayVert = overlay.children('.vert-container');
 	gridWidth = overlay.width();
 	overlayVert.css({width: gridWidth, position: 'absolute', top: 0});
@@ -185,7 +187,7 @@ var hashgrid = function(set) {
 	// Check for saved state
 	overlayCookie = readCookie(options.cookiePrefix + options.id);
 	if (typeof overlayCookie == 'string') {
-		state = overlayCookie.split(',');
+		state = overlayCookie.split('-');
 		state[2] = Number(state[2]);
 		if ((typeof state[2] == 'number') && !isNaN(state[2])) {
 			classNumber = state[2].toFixed(0);
@@ -206,15 +208,15 @@ var hashgrid = function(set) {
 	}
 
 	// Keyboard controls
-	jQuery(document).bind('keydown', keydownHandler);
-	jQuery(document).bind('keyup', keyupHandler);
+	$(document).bind('keydown', keydownHandler);
+	$(document).bind('keyup', keyupHandler);
 
 	/**
 	 * Helpers
 	 */
 
 	function getModifier(e) {
-		if (options.modifierKey == null) return true; // Bypass by default
+		if (options.modifierKey === null) return true; // Bypass by default
 		var m = true;
 		switch(options.modifierKey) {
 			case 'ctrl':
@@ -242,7 +244,7 @@ var hashgrid = function(set) {
 	}
 
 	function saveState() {
-		createCookie(options.cookiePrefix + options.id, (sticky ? '1' : '0') + ',' + overlayZState + ',' + classNumber, 1);
+		createCookie(options.cookiePrefix + options.id, (sticky ? '1' : '0') + '-' + overlayZState + '-' + classNumber, 1);
 	}
 
 	function showOverlay() {
@@ -250,9 +252,10 @@ var hashgrid = function(set) {
 		overlayVert.css({width: overlay.width()});
 		// hide any vertical blocks that aren't at the top of the viewport
 		overlayVert.children('.vert').each(function () {
-			jQuery(this).css('display','inline-block');
-			if (jQuery(this).offset().top > 0) {
-				jQuery(this).hide();
+			var vCol = $(this);
+			vCol.css('display','inline-block');
+			if (vCol.offset().top > vCol.parent().offset().top) {
+				vCol.hide();
 			}
 		});
 	}
@@ -260,6 +263,8 @@ var hashgrid = function(set) {
 	/**
 	 * Event handlers
 	 */
+
+	alreadyDown = {};
 
 	function keydownHandler(e) {
 		var k,
@@ -279,6 +284,11 @@ var hashgrid = function(set) {
 		if (!k) {
 			return true;
 		}
+
+		if (alreadyDown[k]) {
+			return true;
+		}
+		alreadyDown[k] = true;
 
 		switch(k) {
 			case options.showGridKey:
@@ -342,6 +352,7 @@ var hashgrid = function(set) {
 		}
 
 		k = getKey(e);
+		alreadyDown[k] = false;
 
 		if (k && (k == options.showGridKey) && !sticky) {
 			overlay.hide();
@@ -384,7 +395,7 @@ var hashgrid = function(set) {
 				c = c.substring(1, c.length);
 			}
 
-			if (c.indexOf(nameEQ) == 0) {
+			if (c.indexOf(nameEQ) === 0) {
 				return c.substring(nameEQ.length, c.length);
 			}
 		}
@@ -410,16 +421,3 @@ var hashgrid = function(set) {
 
 	return {};
 };
-
-
-/**
- * You can call hashgrid from your own code, but it's loaded here as
- * an example for your convenience.
- */
-jQuery(document).ready(function() {
-
-	var grid = new hashgrid({
-		numberOfGrids: 2
-	});
-
-});

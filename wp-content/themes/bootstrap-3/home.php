@@ -22,7 +22,7 @@ get_header(); ?>
 				<?php endif; ?>
 			</div>
 		</div>
-	</div>
-</div><!-- #page -->
+	</div>	
+</div><!-- .page -->
 
 <?php get_footer(); ?>
